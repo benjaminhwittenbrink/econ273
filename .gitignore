@@ -51,6 +51,11 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Output files 
+*.csv
+*.pickle
+*.DS_Store
+
 # Translations
 *.mo
 *.pot

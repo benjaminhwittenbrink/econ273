@@ -1,0 +1,43 @@
+# constants
+N = 100
+M = 100
+J = 3
+
+# demand side parameters 
+[theta]
+betas = [5, 1, 1]
+alpha = 1
+sigma_alpha = 1
+
+# supply side parameters
+gammas = [2, 1, 1]
+
+# product characteristics
+[X.X2]
+a = 0
+b = 1
+
+[X.X3]
+mu = 0
+sigma = 1
+
+# consumer heterogeneity 
+[nu]
+mu = 0
+sigma = 1
+
+# demand shocks 
+[xi]
+mu = 0 
+sigma = 1
+
+# cost shifters 
+[cost.W]
+mu = 0
+sigma = 1
+
+[cost.Z]
+mu = 0 
+sigma = 1
+
+# iid shock

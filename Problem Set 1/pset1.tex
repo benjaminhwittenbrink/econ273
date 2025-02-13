@@ -1,5 +1,6 @@
 \documentclass{article}
 \usepackage{graphicx}
+\usepackage{amsmath}
 
 \title{14.273 IO Problem Set 1}
 \author{Benjamin Wittenbrink, Jack Kelly, and Veronicá Bäcker-Peral}
@@ -9,6 +10,30 @@
 
 \maketitle
 
-\section{Introduction}
+\section{Demand}
+
+Consider a market with $m = 1, \dots, 100$ and products $j = 1, 2, 3$. Consumer $i$'s utility for product $j$ in market $m$ is given by 
+\begin{align}
+    U_{ijm} &= X_{jm} \beta - \alpha_i p_{jm} + \xi_{jm} + \epsilon_{ijm} \\ 
+    \alpha_i &= \alpha + \sigma_\alpha \nu_{ip} \\ 
+    U_{i0m} &= \epsilon_{i0m}. 
+\end{align}
+
+Let $\delta_{jm}$ be the mean utility, defined as 
+\begin{equation}
+    \delta_{jm} = X_{jm} \beta - \alpha p_{jm} + \xi_{jm}. 
+\end{equation}
+Then we can write utility as 
+\[
+U_{ijm} = \delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm} + \epsilon_{ijm}.
+\]
+
+Since $\epsilon$ is distributed according to Type 1 Extreme Value distribution, we can write the probability that consumer $i$ purchases product $j$ in market $m$ as 
+\[
+    P_{ijm} = \frac{\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm})}{
+    1 + \sum_{k=1}^3 \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})
+    }.
+\]
+Then the shares can be written as $s_{jm} = \int P_{ijm} d F(\nu)$. 
 
 \end{document}

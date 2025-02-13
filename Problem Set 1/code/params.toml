@@ -40,4 +40,8 @@ sigma = 1
 mu = 0 
 sigma = 1
 
-# iid shock
+[cost.eta]
+mu = 0 
+sigma = 1
+
+

@@ -5,134 +5,184 @@ Date: 03/01/25
 """
 
 import numpy as np
+import math
+from scipy.integrate import quad_vec
 
 
-def simulate(params):
-    """
-    Simulate data for the model.
+def lognormal_pdf(x, mu, sigma):
+    term1 = 1 / (x * sigma * np.sqrt(2 * np.pi))
+    term2 = np.exp(-((np.log(x) - mu) ** 2) / (2 * sigma**2))
+    return term1 * term2
 
-    This function generates simulated data and returns a dictionary containing
-    various model inputs.
 
-    Parameters
-    ----------
-    params : dict
-        Model parameters.
+class DemandData:
 
-    Returns
-    -------
-    dict
-        Dictionary with the following keys:
+    def __init__(self, params, seed=14_273):
+        self.params = params
+        self.seed = seed
+        self.jm_shape = (self.params["J"], self.params["M"])
 
-        X : array_like, shape (3, J, M)
-            Product characteristics.
+    # === Helper Methods ===
+
+    # Initialize products, cost shifters, and shocks
+    def _initialize_products(self):
+        # construct product characteristics
+        np.random.seed(self.seed)
+        X_dist = self.params["X"]
+        X1 = np.ones(self.jm_shape)
+        X2 = np.random.uniform(X_dist["X2"]["a"], X_dist["X2"]["b"], self.jm_shape)
+        X3 = np.random.normal(X_dist["X3"]["mu"], X_dist["X3"]["sigma"], self.jm_shape)
+        self.X = np.stack((X1, X2, X3))
+
+    def _initialize_cost_shifters(self):
+        # construct cost shifters
+        np.random.seed(self.seed)
+        cdist = self.params["cost"]
+        self.Z = np.random.lognormal(
+            cdist["Z"]["mu"], cdist["Z"]["sigma"], self.jm_shape
+        )
+        self.W = np.random.lognormal(
+            cdist["W"]["mu"], cdist["W"]["sigma"], self.params["J"]
+        )
+
+    def _initialize_shocks(self):
+        np.random.seed(self.seed)
+        self.xi = np.random.normal(
+            self.params["xi"]["mu"], self.params["xi"]["sigma"], self.jm_shape
+        )
+        self.eta = np.random.lognormal(
+            self.params["cost"]["eta"]["mu"],
+            self.params["cost"]["eta"]["sigma"],
+            self.jm_shape,
+        )
+
+    def _set_marginal_cost(self):
+        gammas = self.params["gammas"]
+        self.mc = (
+            gammas[0]
+            + gammas[1] * self.W[:, np.newaxis]
+            + gammas[2] * self.Z
+            + self.eta
+        )
+
+    # Helper methods to calculate shares
+    def _calc_util(self, p, nu, delta):
+        return np.exp(delta - self.params["sigma_alpha"] * nu * p)
+
+    def _calc_nu_dist(self, nu):
+        return lognormal_pdf(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
+
+    def _integrand_probability(self, nu, delta, p):
+        # probability is exp(U) / (1 + sum_(k) exp(U))
+        num = self._calc_util(p, nu, delta)
+        denom = 1 + np.sum(num, axis=0)
+        # multiply probability with density of nu
+        res = num / denom * self._calc_nu_dist(nu)
+        return res
+
+    # Helper methods to calculate derivative of shares
+    def _integrand_derivative(self, nu, delta, p):
+        # derivative is (1 + sum_(k != j) exp(U)) / (1 + sum_(k) exp(U))^2 * dU_ijm/dp_jm
+        util = self._calc_util(p, nu, delta)
+        tot_util = 1 + np.sum(util, axis=0)
+        num = tot_util - util
+        denom = (tot_util) ** 2
+        dU_dp = -util * (self.params["alpha"] + self.params["sigma_alpha"] * nu)
+        # multiply with density of nu
+        res = (num / denom) * dU_dp * self._calc_nu_dist(nu)
+        return res
+
+    # === Public Methods ===
+    def simulate(self, init_p=None, tol=1e-6, max_iter=1000):
+        """
+        Simulate data for the model.
+        This function generates simulated data and returns prices and market shares.
+
+        Returns
+        -------
+        s : array_like, shape (J , M)
+                Market shares.
         p : array_like, shape (J, M)
             Prices.
-        s : array_like, shape (J , M)
+        """
+        self._initialize_products()
+        self._initialize_cost_shifters()
+        self._initialize_shocks()
+        self._set_marginal_cost()
+
+        if init_p is None:
+            init_p = np.ones(self.jm_shape)
+        shares, p = self.run_price_fixed_point(init_p, tol=tol, max_iter=max_iter)
+
+        return shares, p
+
+    def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000):
+        """
+        Find the fixed point of prices using an iterative approach.
+        Integrates shares, derivative of shares over distribution of nus.
+        Calculates price according to oligopolistic pricing equation:
+            (p - mc) / p = -1 / (d ln s / d ln p)
+        which we transform to:
+            p = - s / (d s / d p) + mc
+
+        Parameters
+        ----------
+        init_p : array_like, shape (J, M)
+            Initial prices.
+        tol : float, optional
+            Tolerance for convergence. Default is 1e-6.
+        max_iter : int, optional
+            Maximum number of iterations. Default is 1000.
+
+        Returns
+        -------
+        shares : array_like, shape (J, M)
+            Market shares corresponding to the converged prices.
+        p : array_like, shape (J, M)
+            Converged prices.
+        """
+        p = init_p
+
+        for i in range(max_iter):
+            shares, ds_dp = self.derive_shares(p)
+            # update price according to oligopolistic pricing equation
+            p_new = -shares / ds_dp + self.mc
+            # if price converges, exit loop, else continue
+            if np.abs(p_new - p).max() < tol:
+                break
+            p = p_new
+
+        if i == max_iter - 1:
+            raise Warning("Price fixed point did not converge.")
+
+        return shares, p
+
+    def derive_shares(self, p):
+        """
+        Derive market shares and derivative of market shares wrt to prices.
+
+        Parameters
+        ----------
+        p : array_like, shape (J, M)
+            Prices.
+
+        Returns
+        -------
+        shares : array_like, shape (J, M)
             Market shares.
-        W : array_like, shape (J,)
-            Cost shifter.
-        Z : array_like, shape (J, M)
-            Cost shifter.
-    """
-    jm_shape = (params["J"], params["M"])
-    Xdist = params["X"]
-    cdist = params["cost"]
-
-    # construct product characteristics
-    X1 = np.ones(jm_shape)
-    X2 = np.random.uniform(Xdist["X2"]["a"], Xdist["X2"]["b"], jm_shape)
-    X3 = np.random.normal(Xdist["X3"]["mu"], Xdist["X3"]["sigma"], jm_shape)
-    X = np.column_stack((X1, X2, X3))
-
-    # draw shocks and cost shifters
-    xi = np.random.normal(params["xi"]["mu"], params["xi"]["sigma"], jm_shape)
-    Z = np.random.normal(cdist["Z"]["mu"], cdist["Z"]["sigma"], jm_shape)
-    W = np.random.normal(cdist["W"]["mu"], cdist["W"]["sigma"], params["J"])
-
-    # @TODO: just placeholder right now
-    # determine prices and shares
-    p_init = np.zeros(jm_shape)
-    s = derive_shares(params, X, p_init, W, Z)
-    p = solve_prices(params, s, X, W, Z)
-
-    return {
-        "X": X,
-        "p": p,
-        "s": s,
-        "W": W,
-        "Z": Z,
-    }
-
-
-def derive_shares(params, X, p, W, Z):
-    """
-    Derive market shares from the model.
-
-    Parameters
-    ----------
-    params : dict
-        Model parameters.
-    X : array_like, shape (3, J, M)
-        Product characteristics.
-    p : array_like, shape (J, M)
-        Prices.
-    W : array_like, shape (J,)
-        Cost shifter.
-    Z : array_like, shape (J, M)
-        Cost shifter.
-
-    Returns
-    -------
-    array_like, shape (J, M)
-        Market shares.
-    """
-    return np.zeros((params["J"], params["M"]))
-
-
-def solve_prices(params, s, X, W, Z):
-    """
-    Solve for prices from the model.
-
-    Parameters
-    ----------
-    params : dict
-        Model parameters.
-    s : array_like, shape (J, M)
-        Market shares.
-    X : array_like, shape (3, J, M)
-        Product characteristics.
-    W : array_like, shape (J,)
-        Cost shifter.
-    Z : array_like, shape (J, M)
-        Cost shifter.
-
-    Returns
-    -------
-    array_like, shape (J, M)
-        Prices.
-    """
-    return np.zeros(params["J"] * params["M"])
-
-
-def marginal_cost(W, Z, eta, gammas):
-    """
-    Helper function to implement marginal cost function.
-
-    Parameters
-    ----------
-    W : array_like, shape (J,)
-        Cost shifter.
-    Z : array_like, shape (J, M)
-        Cost shifter.
-    eta : array_like, shape (J, M)
-        Cost error term.
-    params : dict
-        Model parameters.
-
-    Returns
-    -------
-    array_like, shape (J,)
-        Marginal cost.
-    """
-    return gammas[0] + gammas[1] * W[:, np.newaxis] + gammas[2] * Z + eta
+        ds_dp : array_like, shape (J, M)
+            Derivative of market shares wrt to prices.
+        """
+        betas = np.array(self.params["betas"])
+        delta = np.tensordot(betas, self.X, axes=1) - self.params["alpha"] * p + self.xi
+        shares = quad_vec(
+            lambda x: self._integrand_probability(nu=x, delta=delta, p=p),
+            a=0,
+            b=np.inf,
+        )[0]
+        ds_dp = quad_vec(
+            lambda nu: self._integrand_derivative(nu, delta, p),
+            a=0,
+            b=np.inf,
+        )[0]
+        return shares, ds_dp

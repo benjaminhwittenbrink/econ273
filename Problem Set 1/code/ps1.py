@@ -16,8 +16,10 @@ import scipy.optimize as opt
 from importlib import reload
 
 # %%
-from simulate import simulate
+import simulate
 
+# %%
+reload(simulate)
 # %%
 # Load parameters from params.toml
 with open("params.toml", "r") as file:
@@ -30,4 +32,7 @@ np.random.seed(14_273)
 
 # %%
 # generate simulated data given params (returns X, p, s, W, Z)
-dat = simulate(params)
+data = simulate.DemandData(params, seed=14_273)
+
+# %%
+s, p = data.simulate()

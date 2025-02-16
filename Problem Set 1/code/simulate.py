@@ -7,11 +7,7 @@ Date: 03/01/25
 import numpy as np
 from scipy.integrate import quad_vec
 
-
-def lognormal_pdf(x, mu, sigma):
-    term1 = 1 / (x * sigma * np.sqrt(2 * np.pi))
-    term2 = np.exp(-((np.log(x) - mu) ** 2) / (2 * sigma**2))
-    return term1 * term2
+from utils import calc_nu_dist
 
 
 class DemandData:
@@ -77,15 +73,16 @@ class DemandData:
     def _calc_util(self, p, nu, delta):
         return np.exp(delta - self.params["sigma_alpha"] * nu * p)
 
-    def _calc_nu_dist(self, nu):
-        return lognormal_pdf(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
-
     def _integrand_probability(self, nu, delta, p):
         # probability is exp(U) / (1 + sum_(k) exp(U))
         num = self._calc_util(p, nu, delta)
         denom = 1 + np.sum(num, axis=0)
         # multiply probability with density of nu
-        res = num / denom * self._calc_nu_dist(nu)
+        res = (
+            num
+            / denom
+            * calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
+        )
         return res
 
     # Helper methods to calculate derivative of shares
@@ -97,7 +94,11 @@ class DemandData:
         denom = (tot_util) ** 2
         dU_dp = -util * (self.params["alpha"] + self.params["sigma_alpha"] * nu)
         # multiply with density of nu
-        res = (num / denom) * dU_dp * self._calc_nu_dist(nu)
+        res = (
+            (num / denom)
+            * dU_dp
+            * calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
+        )
         return res
 
     # === Public Methods ===
@@ -120,7 +121,7 @@ class DemandData:
 
         if init_p is None:
             init_p = np.ones(self.jm_shape)
-        self.shares, self.p, delta= self.run_price_fixed_point(
+        self.shares, self.p, delta = self.run_price_fixed_point(
             init_p, tol=tol, max_iter=max_iter
         )
 
@@ -168,6 +169,7 @@ class DemandData:
             raise Warning("Price fixed point did not converge.")
 
         return shares, p, delta
+
     def derive_shares(self, p):
         """
         Derive market shares and derivative of market shares wrt to prices.

@@ -17,9 +17,11 @@ from importlib import reload
 
 # %%
 import simulate
+import blp
 
 # %%
 reload(simulate)
+reload(blp)
 # %%
 # Load parameters from params.toml
 with open("params.toml", "r") as file:
@@ -52,4 +54,8 @@ for b in range(1000):
     res = data.compute_empirical_moments()
     res_l.append(res)
 
+# %%
+blp = blp.BLP(data)
+# %%
+blp.run_gmm_2stage()
 # %%

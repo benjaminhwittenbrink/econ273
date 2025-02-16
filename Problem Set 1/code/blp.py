@@ -28,10 +28,10 @@ class BLP:
             nu, self.params["nu"]["mu"], self.params["nu"]["sigma"]
         )
 
-    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14):
+    def _invert_shares(self, sigma_alpha, m_iter=1000, tol=1e-14):
         delta = np.ones(self.data.jm_shape)
         true_log_shares = np.log(self.data.shares)
-        for i in range(max_iter):
+        for i in range(m_iter):
             shares = quad_vec(
                 lambda nu: self._integrand_probability(
                     nu, sigma_alpha=sigma_alpha, delta=delta
@@ -46,7 +46,7 @@ class BLP:
                 break
             delta = delta_new
 
-        if i == max_iter - 1:
+        if i == m_iter - 1:
             raise Warning("Delta contraction mapping did not converge.")
 
         return delta
@@ -61,7 +61,7 @@ class BLP:
 
     def _estimate_xi(self, sigma_alpha):
         # helper fns: _invert_shares, _compute_moment_conditions, _construct_instruments
-        delta = self._invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14)
+        delta = self._invert_shares(self, sigma_alpha, m_iter=1000, tol=1e-14)
 
         # @VBP TODO
         # Reshape X from (3,3,100) to (300 x 1)
@@ -86,7 +86,7 @@ class BLP:
         H = np.hstack(
             (
                 self.flatten(BLP_inst),
-                self.flatten(self.data.W),
+                np.repeat(self.data.W, self.params["M"])[:, np.newaxis],
                 self.flatten(self.data.Z),
             )
         )
@@ -94,12 +94,10 @@ class BLP:
         self.num_moments = H.shape[1]
 
     def flatten(self, x):
-
         # If x is (C, J, M) shape, reshape to (M*J, C)
         # If x is (J,M) shape reshape to (M*J, 1)
-
         if len(x.shape) == 3:
-            return np.reshape(x, (x[0], -1)).T
+            return np.reshape(x, (x.shape[0], -1)).T
         else:
             return np.reshape(x, (-1, 1))
 

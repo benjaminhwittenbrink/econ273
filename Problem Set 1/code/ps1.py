@@ -35,7 +35,9 @@ np.random.seed(14_273)
 data = simulate.DemandData(params, seed=14_273, verbose=True)
 
 # %%
-s, p = data.simulate()
+s, p, delta = data.simulate()
+
+# %%
 
 # %%
 res = data.compute_empirical_moments()

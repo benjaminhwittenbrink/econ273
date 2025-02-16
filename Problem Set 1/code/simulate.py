@@ -120,11 +120,11 @@ class DemandData:
 
         if init_p is None:
             init_p = np.ones(self.jm_shape)
-        self.shares, self.p = self.run_price_fixed_point(
+        self.shares, self.p, delta= self.run_price_fixed_point(
             init_p, tol=tol, max_iter=max_iter
         )
 
-        return self.shares, self.p
+        return self.shares, self.p, delta
 
     def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000):
         """
@@ -154,7 +154,7 @@ class DemandData:
         p = init_p
 
         for i in range(max_iter):
-            shares, ds_dp = self.derive_shares(p)
+            shares, ds_dp, delta = self.derive_shares(p)
             # update price according to oligopolistic pricing equation
             p_new = -shares / ds_dp + self.mc
             # if price converges, exit loop, else continue
@@ -167,8 +167,7 @@ class DemandData:
         if i == max_iter - 1:
             raise Warning("Price fixed point did not converge.")
 
-        return shares, p
-
+        return shares, p, delta
     def derive_shares(self, p):
         """
         Derive market shares and derivative of market shares wrt to prices.
@@ -198,7 +197,7 @@ class DemandData:
             a=0,
             b=np.inf,
         )[0]
-        return shares, ds_dp
+        return shares, ds_dp, delta
 
     # === Moment Conditions ===
 

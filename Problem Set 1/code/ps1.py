@@ -31,8 +31,19 @@ print(params)
 np.random.seed(14_273)
 
 # %%
-# generate simulated data given params (returns X, p, s, W, Z)
-data = simulate.DemandData(params, seed=14_273)
+# generate simulated data given params
+data = simulate.DemandData(params, seed=14_273, verbose=True)
 
 # %%
 s, p = data.simulate()
+
+# %%
+res = data.compute_empirical_moments()
+# %%
+res_l = []
+rs = np.random.randint(0, 1_000_000_000)
+for b in range(1000):
+    data = simulate.DemandData(params, seed=rs + b, verbose=False)
+    s, p = data.simulate()
+    res = data.compute_empirical_moments()
+    res_l.append(res)

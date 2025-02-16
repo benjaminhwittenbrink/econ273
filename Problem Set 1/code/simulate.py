@@ -5,7 +5,6 @@ Date: 03/01/25
 """
 
 import numpy as np
-import math
 from scipy.integrate import quad_vec
 
 
@@ -17,10 +16,19 @@ def lognormal_pdf(x, mu, sigma):
 
 class DemandData:
 
-    def __init__(self, params, seed=14_273):
+    def __init__(self, params, seed=14_273, verbose=False):
         self.params = params
         self.seed = seed
+        self.verbose = verbose
         self.jm_shape = (self.params["J"], self.params["M"])
+
+        # initialize data attributes
+        self.X = None
+        self.Z = None
+        self.W = None
+        self.xi = None
+        self.eta = None
+        self.mc = None
 
     # === Helper Methods ===
 
@@ -100,7 +108,7 @@ class DemandData:
 
         Returns
         -------
-        s : array_like, shape (J , M)
+        shares : array_like, shape (J , M)
                 Market shares.
         p : array_like, shape (J, M)
             Prices.
@@ -112,9 +120,11 @@ class DemandData:
 
         if init_p is None:
             init_p = np.ones(self.jm_shape)
-        shares, p = self.run_price_fixed_point(init_p, tol=tol, max_iter=max_iter)
+        self.shares, self.p = self.run_price_fixed_point(
+            init_p, tol=tol, max_iter=max_iter
+        )
 
-        return shares, p
+        return self.shares, self.p
 
     def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000):
         """
@@ -149,6 +159,8 @@ class DemandData:
             p_new = -shares / ds_dp + self.mc
             # if price converges, exit loop, else continue
             if np.abs(p_new - p).max() < tol:
+                if self.verbose:
+                    print(f"Price fixed point converged in {i} iterations.")
                 break
             p = p_new
 
@@ -175,14 +187,41 @@ class DemandData:
         """
         betas = np.array(self.params["betas"])
         delta = np.tensordot(betas, self.X, axes=1) - self.params["alpha"] * p + self.xi
+        # numerically integrate over full support of nu distribution
         shares = quad_vec(
-            lambda x: self._integrand_probability(nu=x, delta=delta, p=p),
+            lambda nu: self._integrand_probability(nu, delta=delta, p=p),
             a=0,
             b=np.inf,
         )[0]
         ds_dp = quad_vec(
-            lambda nu: self._integrand_derivative(nu, delta, p),
+            lambda nu: self._integrand_derivative(nu, delta=delta, p=p),
             a=0,
             b=np.inf,
         )[0]
         return shares, ds_dp
+
+    def compute_empirical_moments(self):
+
+        # compute E[xi * X]
+        res = np.sum(self.xi * self.X, axis=1)
+        E_xi_X = np.sum(res, axis=1) / (self.params["M"] * self.params["J"])
+
+        # compute E[xi * loo_mean(X)]
+        loo_mean_X = (np.sum(self.X, axis=1) - self.X) / (self.params["M"] - 1)
+        res = np.sum(self.xi * loo_mean_X, axis=1)
+        E_xi_loo_mean_X = np.sum(res, axis=1) / (self.params["M"] * self.params["J"])
+
+        # compute E[xi * p]
+        E_xi_p = np.mean(self.xi * self.p)
+
+        # compute E[xi * loo_mean(p)]
+        E_xi_loo_mean_p = (
+            (np.sum(self.p, axis=0) - self.p) / (self.params["M"] - 1)
+        ).mean()
+
+        return {
+            "E_xi_X": E_xi_X,
+            "E_xi_loo_mean_X": E_xi_loo_mean_X,
+            "E_xi_p": E_xi_p,
+            "E_xi_loo_mean_p": E_xi_loo_mean_p,
+        }

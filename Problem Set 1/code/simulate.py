@@ -102,7 +102,7 @@ class DemandData:
         return res
 
     # === Public Methods ===
-    def simulate(self, init_p=None, tol=1e-6, max_iter=1000):
+    def simulate(self, init_p=None, tol=1e-14, max_iter=1000):
         """
         Simulate data for the model.
         This function generates simulated data and returns prices and market shares.

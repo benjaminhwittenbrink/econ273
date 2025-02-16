@@ -200,24 +200,38 @@ class DemandData:
         )[0]
         return shares, ds_dp
 
-    def compute_empirical_moments(self):
+    # === Moment Conditions ===
 
+    # Helper methods to compute moment conditions
+    @staticmethod
+    def _leave_one_out_mean(x, axis, n):
+        x_sum = np.sum(x, axis=axis, keepdims=True)
+        return (x_sum - x) / (n - 1)
+
+    @staticmethod
+    def _calc_xi_X_moment(xi, X, axes, norm):
+        return np.sum(xi * X, axis=axes) / norm
+
+    def compute_empirical_moments(self):
+        M, J = self.params["M"], self.params["J"]
         # compute E[xi * X]
-        res = np.sum(self.xi * self.X, axis=1)
-        E_xi_X = np.sum(res, axis=1) / (self.params["M"] * self.params["J"])
+        # sum across M, across J and then divide by J * M to get mean
+        E_xi_X = self._calc_xi_X_moment(self.xi, self.X, axes=(1, 2), norm=M * J)
 
         # compute E[xi * loo_mean(X)]
-        loo_mean_X = (np.sum(self.X, axis=1) - self.X) / (self.params["M"] - 1)
-        res = np.sum(self.xi * loo_mean_X, axis=1)
-        E_xi_loo_mean_X = np.sum(res, axis=1) / (self.params["M"] * self.params["J"])
+        # calculate leave one out mean of each characteristic for products in same market (i.e., over J)
+        loo_mean_X = self._leave_one_out_mean(self.X, axis=1, n=J)
+        E_xi_loo_mean_X = self._calc_xi_X_moment(
+            self.xi, loo_mean_X, axes=(1, 2), norm=M * J
+        )
 
         # compute E[xi * p]
         E_xi_p = np.mean(self.xi * self.p)
 
         # compute E[xi * loo_mean(p)]
-        E_xi_loo_mean_p = (
-            (np.sum(self.p, axis=0) - self.p) / (self.params["M"] - 1)
-        ).mean()
+        # calculate leave one out mean of prices for products in same market (i.e., over J)
+        loo_mean_p = self._leave_one_out_mean(self.p, axis=0, n=J)
+        E_xi_loo_mean_p = np.mean(self.xi * loo_mean_p)
 
         return {
             "E_xi_X": E_xi_X,

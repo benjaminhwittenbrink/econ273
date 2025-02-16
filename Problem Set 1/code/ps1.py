@@ -43,7 +43,11 @@ res = data.compute_empirical_moments()
 res_l = []
 rs = np.random.randint(0, 1_000_000_000)
 for b in range(1000):
+    if b % 100 == 0:
+        print(f"Iteration {b}")
     data = simulate.DemandData(params, seed=rs + b, verbose=False)
     s, p = data.simulate()
     res = data.compute_empirical_moments()
     res_l.append(res)
+
+# %%

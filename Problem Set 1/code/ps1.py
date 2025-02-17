@@ -61,6 +61,8 @@ blp_est = blp.BLP(data)
 # %%
 alpha_hat, beta_hat, sigma_alpha_hat = blp_est.run_gmm_2stage()
 # %%
-print(f"alpha_hat: {alpha_hat}")
-print(f"beta_hat: {beta_hat}")
-print(f"sigma_alpha_hat: {sigma_alpha_hat}")
+print(f"alpha_hat: {np.round(alpha_hat, 5)} vs. {params['alpha']}")
+print(f"beta_hat: {np.round(beta_hat, 5)} vs. {params['betas']}")
+print(f"sigma_alpha_hat: {np.round(sigma_alpha_hat, 5)} vs. {params['sigma_alpha']}")
+
+# %%

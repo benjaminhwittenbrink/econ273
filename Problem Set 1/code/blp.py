@@ -17,12 +17,14 @@ class BLP:
     def __init__(self, data, verbose=False):
         self.data = data
         self.params = data.params
+        self.verbose = verbose
         self.tol = 1e-14
         self.H = None
         self.num_moments = None
-        self.verbose = verbose
 
+    # === Helper Methods ===
     def _integrand_probability(self, nu, sigma_alpha, delta):
+        # helper function to calculate shares by integrating over nu
         num = np.exp(delta - sigma_alpha * self.data.p * nu)
         denom = 1 + np.sum(num, axis=0)
         return (num / denom) * calc_nu_dist(
@@ -30,9 +32,11 @@ class BLP:
         )
 
     def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14):
+        # initialize delta to ones for contraction mapping
         delta = np.ones(self.data.jm_shape)
         true_log_shares = np.log(self.data.shares)
         for i in range(max_iter):
+            # integrate over full nu distribution to get shares
             shares = quad_vec(
                 lambda nu: self._integrand_probability(
                     nu, sigma_alpha=sigma_alpha, delta=delta
@@ -40,6 +44,7 @@ class BLP:
                 a=0,
                 b=np.inf,
             )[0]
+            # update delta according to delta += true_log - predicted_log shares
             delta_new = delta + true_log_shares - np.log(shares)
             if np.abs(delta_new - delta).max() < tol:
                 if self.verbose:
@@ -53,12 +58,10 @@ class BLP:
         return delta
 
     def _estimate_iv_params(self, X_long, delta_long, price_long):
-        # Stack X_long and price_long along second dimension to create a 300 by 4 matrix
-        endog = np.hstack((X_long, price_long))
         IV_reg = IV2SLS(
             dependent=delta_long,
-            exog=None,
-            endog=endog,
+            exog=X_long,
+            endog=price_long,
             instruments=self.H,
         ).fit()
         coefs = IV_reg.params.values
@@ -67,32 +70,34 @@ class BLP:
         return alpha, betas
 
     def _estimate_xi(self, sigma_alpha):
-        # helper fns: _invert_shares, _compute_moment_conditions, _construct_instruments
+        # Invert shares to get delta
         delta = self._invert_shares(sigma_alpha, max_iter=1000, tol=1e-14)
-
-        # @VBP TODO
-        # Reshape X from (3,3,100) to (300 x 1)
+        # Flatten matrices for easy regression
         X_long = self.flatten(self.data.X)
-
-        # Flatten delta to (300,)
         delta_long = delta.flatten()
         price_long = self.flatten(self.data.p)
-
+        # Estimate alpha and betas using IV regression
         alpha, betas = self._estimate_iv_params(X_long, delta_long, price_long)
+        # Calculate implied xi hat
         xi = delta_long - np.dot(X_long, betas) - alpha * price_long.flatten()
         return alpha, betas, xi
 
     def _compute_gmm_obj(self, theta, W):
+        # Compute GMM objective function
         _, _, xi = self._estimate_xi(theta[0])
         gmm_objective = (xi @ self.H).T @ W @ (xi @ self.H)
         return gmm_objective
 
-    def construct_instruments(self, **kwargs):
-        # form BLP instruments
+    def construct_instruments(self):
+        # form BLP instruments, which are:
+        # 1. product characteristics of other products in same market
+        # 2. cost shifters: W (at product level)
+        # 3. cost shifters: Z (at product-market level)
         BLP_inst = np.sum(self.data.X, axis=1, keepdims=True) - self.data.X
         H = np.hstack(
             (
-                self.flatten(BLP_inst),
+                # filtering out the first column of H, as its just a constant
+                self.flatten(BLP_inst)[:, 1:],
                 np.repeat(self.data.W, self.params["M"])[:, np.newaxis],
                 self.flatten(self.data.Z),
             )
@@ -109,7 +114,7 @@ class BLP:
             return np.reshape(x, (-1, 1))
 
     def _get_optimal_weights(self, xi):
-        mat = np.outer(np.dot(self.H.T, xi), np.dot(xi, self.H))
+        mat = (self.H.T * (xi.flatten() ** 2)) @ self.H
         return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
 
     def run_gmm_2stage(self):

@@ -115,6 +115,8 @@ class BLP:
 
     def _get_optimal_weights(self, xi):
         mat = (self.H.T * (xi.flatten() ** 2)) @ self.H
+        mat2 = (self.H.T @ xi @ xi.T@ self.H)
+        print(abs(mat2 - mat).max())
         return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
 
     def run_gmm_2stage(self):

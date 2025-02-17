@@ -58,11 +58,12 @@ class BLP:
         return delta
 
     def _estimate_iv_params(self, X_long, delta_long, price_long):
+        # find alpha and betas
         IV_reg = IV2SLS(
             dependent=delta_long,
             exog=X_long,
             endog=price_long,
-            instruments=self.H,
+            instruments=self.H[:, 1:],
         ).fit()
         coefs = IV_reg.params.values
         betas = coefs[:3]
@@ -96,8 +97,7 @@ class BLP:
         BLP_inst = np.sum(self.data.X, axis=1, keepdims=True) - self.data.X
         H = np.hstack(
             (
-                # filtering out the first column of H, as its just a constant
-                self.flatten(BLP_inst)[:, 1:],
+                self.flatten(BLP_inst),
                 np.repeat(self.data.W, self.params["M"])[:, np.newaxis],
                 self.flatten(self.data.Z),
             )
@@ -115,8 +115,6 @@ class BLP:
 
     def _get_optimal_weights(self, xi):
         mat = (self.H.T * (xi.flatten() ** 2)) @ self.H
-        mat2 = (self.H.T @ xi @ xi.T@ self.H)
-        print(abs(mat2 - mat).max())
         return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
 
     def run_gmm_2stage(self):

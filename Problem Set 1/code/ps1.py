@@ -44,18 +44,23 @@ s, p, delta = data.simulate()
 # %%
 res = data.compute_empirical_moments()
 # %%
-res_l = []
-rs = np.random.randint(0, 1_000_000_000)
-for b in range(1000):
-    if b % 100 == 0:
-        print(f"Iteration {b}")
-    data = simulate.DemandData(params, seed=rs + b, verbose=False)
-    s, p = data.simulate()
-    res = data.compute_empirical_moments()
-    res_l.append(res)
+# res_l = []
+# rs = np.random.randint(0, 1_000_000_000)
+# for b in range(1000):
+#     if b % 100 == 0:
+#         print(f"Iteration {b}")
+#     data = simulate.DemandData(params, seed=rs + b, verbose=False)
+#     s, p = data.simulate()
+#     res = data.compute_empirical_moments()
+#     res_l.append(res)
 
 # %%
-blp = blp.BLP(data)
+reload(blp)
 # %%
-blp.run_gmm_2stage()
+blp_est = blp.BLP(data)
 # %%
+alpha_hat, beta_hat, sigma_alpha_hat = blp_est.run_gmm_2stage()
+# %%
+print(f"alpha_hat: {alpha_hat}")
+print(f"beta_hat: {beta_hat}")
+print(f"sigma_alpha_hat: {sigma_alpha_hat}")

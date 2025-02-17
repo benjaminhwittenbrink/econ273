@@ -14,12 +14,13 @@ from utils import calc_nu_dist
 
 class BLP:
 
-    def __init__(self, data):
+    def __init__(self, data, verbose=False):
         self.data = data
         self.params = data.params
         self.tol = 1e-14
         self.H = None
         self.num_moments = None
+        self.verbose = verbose
 
     def _integrand_probability(self, nu, sigma_alpha, delta):
         num = np.exp(delta - sigma_alpha * self.data.p * nu)
@@ -28,10 +29,10 @@ class BLP:
             nu, self.params["nu"]["mu"], self.params["nu"]["sigma"]
         )
 
-    def _invert_shares(self, sigma_alpha, m_iter=1000, tol=1e-14):
+    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14):
         delta = np.ones(self.data.jm_shape)
         true_log_shares = np.log(self.data.shares)
-        for i in range(m_iter):
+        for i in range(max_iter):
             shares = quad_vec(
                 lambda nu: self._integrand_probability(
                     nu, sigma_alpha=sigma_alpha, delta=delta
@@ -46,7 +47,7 @@ class BLP:
                 break
             delta = delta_new
 
-        if i == m_iter - 1:
+        if i == max_iter - 1:
             raise Warning("Delta contraction mapping did not converge.")
 
         return delta
@@ -54,14 +55,20 @@ class BLP:
     def _estimate_iv_params(self, X_long, delta_long, price_long):
         # Stack X_long and price_long along second dimension to create a 300 by 4 matrix
         endog = np.hstack((X_long, price_long))
-        IV_reg = IV2SLS(dependent=delta_long, instruments=self.H, endog=endog).fit()
-        betas = np.array(IV_reg.params[:3])
-        alpha = IV_reg.params[3]
+        IV_reg = IV2SLS(
+            dependent=delta_long,
+            exog=None,
+            endog=endog,
+            instruments=self.H,
+        ).fit()
+        coefs = IV_reg.params.values
+        betas = coefs[:3]
+        alpha = coefs[3]
         return alpha, betas
 
     def _estimate_xi(self, sigma_alpha):
         # helper fns: _invert_shares, _compute_moment_conditions, _construct_instruments
-        delta = self._invert_shares(self, sigma_alpha, m_iter=1000, tol=1e-14)
+        delta = self._invert_shares(sigma_alpha, max_iter=1000, tol=1e-14)
 
         # @VBP TODO
         # Reshape X from (3,3,100) to (300 x 1)
@@ -72,7 +79,7 @@ class BLP:
         price_long = self.flatten(self.data.p)
 
         alpha, betas = self._estimate_iv_params(X_long, delta_long, price_long)
-        xi = delta - betas @ X_long - alpha * price_long
+        xi = delta_long - np.dot(X_long, betas) - alpha * price_long.flatten()
         return alpha, betas, xi
 
     def _compute_gmm_obj(self, theta, W):
@@ -102,9 +109,8 @@ class BLP:
             return np.reshape(x, (-1, 1))
 
     def _get_optimal_weights(self, xi):
-        return np.linalg.pinv(
-            (1 / (self.params["J"] * self.params["M"])) * self.H.T @ xi @ xi.T @ self.H
-        )
+        mat = np.outer(np.dot(self.H.T, xi), np.dot(xi, self.H))
+        return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
 
     def run_gmm_2stage(self):
         # construct instruments

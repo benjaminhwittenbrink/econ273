@@ -73,14 +73,13 @@ class BLP:
     def _estimate_xi(self, sigma_alpha):
         # Invert shares to get delta
         delta = self._invert_shares(sigma_alpha, max_iter=1000, tol=1e-14)
-        # Flatten matrices for easy regression
-        X_long = self.flatten(self.data.X)
         delta_long = delta.flatten()
-        price_long = self.flatten(self.data.p)
         # Estimate alpha and betas using IV regression
-        alpha, betas = self._estimate_iv_params(X_long, delta_long, price_long)
+        alpha, betas = self._estimate_iv_params(
+            self.X_long, delta_long, self.price_long
+        )
         # Calculate implied xi hat
-        xi = delta_long - np.dot(X_long, betas) - alpha * price_long.flatten()
+        xi = delta_long - np.dot(self.X_long, betas) - alpha * self.price_long.flatten()
         return alpha, betas, xi
 
     def _compute_gmm_obj(self, theta, W):
@@ -88,6 +87,23 @@ class BLP:
         _, _, xi = self._estimate_xi(theta[0])
         gmm_objective = (xi @ self.H).T @ W @ (xi @ self.H)
         return gmm_objective
+
+    def _flatten(self, x):
+        # If x is (C, J, M) shape, reshape to (M*J, C)
+        # If x is (J,M) shape reshape to (M*J, 1)
+        if len(x.shape) == 3:
+            return np.reshape(x, (x.shape[0], -1)).T
+        else:
+            return np.reshape(x, (-1, 1))
+
+    def _convert_data_to_long(self):
+        # Flatten matrices for easy regression
+        self.X_long = self._flatten(self.data.X)
+        self.price_long = self._flatten(self.data.p)
+
+    def _get_optimal_weights(self, xi):
+        mat = (self.H.T * (xi.flatten() ** 2)) @ self.H
+        return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
 
     def construct_instruments(self):
         # form BLP instruments, which are:
@@ -97,29 +113,19 @@ class BLP:
         BLP_inst = np.sum(self.data.X, axis=1, keepdims=True) - self.data.X
         H = np.hstack(
             (
-                self.flatten(BLP_inst),
+                self._flatten(BLP_inst),
                 np.repeat(self.data.W, self.params["M"])[:, np.newaxis],
-                self.flatten(self.data.Z),
+                self._flatten(self.data.Z),
             )
         )
         self.H = H
         self.num_moments = H.shape[1]
 
-    def flatten(self, x):
-        # If x is (C, J, M) shape, reshape to (M*J, C)
-        # If x is (J,M) shape reshape to (M*J, 1)
-        if len(x.shape) == 3:
-            return np.reshape(x, (x.shape[0], -1)).T
-        else:
-            return np.reshape(x, (-1, 1))
-
-    def _get_optimal_weights(self, xi):
-        mat = (self.H.T * (xi.flatten() ** 2)) @ self.H
-        return np.linalg.pinv(mat / (self.params["J"] * self.params["M"]))
-
     def run_gmm_2stage(self):
         # construct instruments
         self.construct_instruments()
+        # convert data to long format (X, p) for IV regression
+        self._convert_data_to_long()
 
         # Stage 1: Weights as identity matrix
         params_init = [1]

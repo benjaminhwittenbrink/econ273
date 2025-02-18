@@ -5,11 +5,11 @@ Date: 03/01/25
 """
 
 # %%
+import toml
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sp
-import toml
-
 import scipy.optimize as opt
 
 # %%
@@ -22,6 +22,13 @@ import blp
 # %%
 reload(simulate)
 reload(blp)
+# %%
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 # %%
 # Load parameters from params.toml
 with open("params.toml", "r") as file:
@@ -57,7 +64,7 @@ res = data.compute_empirical_moments()
 # %%
 reload(blp)
 # %%
-blp_est = blp.BLP(data)
+blp_est = blp.BLP(data, tol=1e-14, verbose=True)
 # %%
 alpha_hat, beta_hat, sigma_alpha_hat = blp_est.run_gmm_2stage()
 # %%

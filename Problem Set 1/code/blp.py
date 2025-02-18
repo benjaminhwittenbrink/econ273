@@ -4,6 +4,8 @@ Author: Benjamin Wittenbrink, Jack Kelly, Veronica Backer Peral
 Date: 03/01/25
 """
 
+import logging
+import time
 import numpy as np
 from linearmodels.iv.model import IV2SLS
 from scipy.integrate import quad_vec
@@ -11,14 +13,16 @@ from scipy.optimize import minimize
 
 from utils import calc_nu_dist
 
+logger = logging.getLogger(__name__)
+
 
 class BLP:
 
-    def __init__(self, data, verbose=False):
+    def __init__(self, data, tol=1e-14, verbose=False):
         self.data = data
         self.params = data.params
         self.verbose = verbose
-        self.tol = 1e-14
+        self.tol = tol
         self.H = None
         self.num_moments = None
 
@@ -47,8 +51,6 @@ class BLP:
             # update delta according to delta += true_log - predicted_log shares
             delta_new = delta + true_log_shares - np.log(shares)
             if np.abs(delta_new - delta).max() < tol:
-                if self.verbose:
-                    print(f"Delta contraction mapping converged in {i} iterations.")
                 break
             delta = delta_new
 
@@ -72,7 +74,7 @@ class BLP:
 
     def _estimate_xi(self, sigma_alpha):
         # Invert shares to get delta
-        delta = self._invert_shares(sigma_alpha, max_iter=1000, tol=1e-14)
+        delta = self._invert_shares(sigma_alpha, max_iter=1000, tol=self.tol)
         delta_long = delta.flatten()
         # Estimate alpha and betas using IV regression
         alpha, betas = self._estimate_iv_params(
@@ -122,6 +124,9 @@ class BLP:
         self.num_moments = H.shape[1]
 
     def run_gmm_2stage(self):
+        if self.verbose:
+            logger.info("Estimating two-stage GMM")
+            start = time.time()
         # construct instruments
         self.construct_instruments()
         # convert data to long format (X, p) for IV regression
@@ -139,6 +144,9 @@ class BLP:
             bounds=[(1e-14, None)],
         )
         sigma_alpha = results.x[0]
+        if self.verbose:
+            stage1 = time.time()
+            logger.info("First stage complete in %.2f seconds.", stage1 - start)
 
         # Stage 2: Optimal weights
         _, _, xi = self._estimate_xi(sigma_alpha)
@@ -152,6 +160,15 @@ class BLP:
             bounds=[(1e-14, None)],
         )
         sigma_alpha = results.x[0]
-        alpha, beta, xi = self._estimate_xi(sigma_alpha)
+        if self.verbose:
+            stage2 = time.time()
+            logger.info("Second stage complete in %.2f seconds.", stage2 - stage1)
+            logger.info("Total runtime: %.2f seconds.", stage2 - start)
 
+        alpha, beta, xi = self._estimate_xi(sigma_alpha)
+        if self.verbose:
+            logger.info("GMM estimation complete:")
+            logger.info("\talpha_hat: %.5f", alpha)
+            logger.info("\tbeta_hat: %s", np.round(beta, 5))
+            logger.info("\tsigma_alpha_hat: %.5f", sigma_alpha)
         return alpha, beta, sigma_alpha

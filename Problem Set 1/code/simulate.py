@@ -6,6 +6,7 @@ Date: 03/01/25
 
 import numpy as np
 from scipy.integrate import quad_vec
+from tqdm import tqdm
 
 from utils import calc_nu_dist
 
@@ -14,6 +15,11 @@ class DemandData:
 
     def __init__(self, params, seed=14_273, verbose=False):
         self.params = params
+
+        # self.params["sigma_alpha"] = 0
+        # self.params["M"] = 1
+        # self.params["J"] = 4
+
         self.seed = seed
         self.verbose = verbose
         self.jm_shape = (self.params["J"], self.params["M"])
@@ -78,11 +84,8 @@ class DemandData:
         num = self._calc_util(p, nu, delta)
         denom = 1 + np.sum(num, axis=0)
         # multiply probability with density of nu
-        res = (
-            num
-            / denom
-            * calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
-        )
+        res = num / denom
+        res *= calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
         return res
 
     # Helper methods to calculate derivative of shares
@@ -94,11 +97,28 @@ class DemandData:
         denom = (tot_util) ** 2
         dU_dp = -util * (self.params["alpha"] + self.params["sigma_alpha"] * nu)
         # multiply with density of nu
-        res = (
-            (num / denom)
-            * dU_dp
-            * calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
-        )
+        res = (num / denom) * dU_dp
+        res *= calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
+        return res
+
+    def _integrand_probability_vectorized(self, delta, p, nu):
+        delta = delta[None, :, :]
+        nu = nu[:, None, None]
+        num = self._calc_util(p, nu, delta)  # shape => (n_nu, J, M)
+        denom = 1 + np.sum(num, axis=1, keepdims=True)  # shape => (n_nu, 1, M)
+        res = num / denom  # shape => (n_nu, J, M)
+        return res
+
+    def _integrand_derivative_vectorized(self, delta, p, nu):
+        delta = delta[None, :, :]
+        nu = nu[:, None, None]
+        util = self._calc_util(p, nu, delta)
+        tot_util = 1 + np.sum(util, axis=1, keepdims=True)
+        num = tot_util - util
+        denom = (tot_util) ** 2
+        dU_dp = -util * (self.params["alpha"] + self.params["sigma_alpha"] * nu)
+        # multiply with density of nu
+        res = (num / denom) * dU_dp
         return res
 
     # === Public Methods ===
@@ -120,14 +140,16 @@ class DemandData:
         self._set_marginal_cost()
 
         if init_p is None:
-            init_p = np.ones(self.jm_shape)
-        self.shares, self.p, delta = self.run_price_fixed_point(
+            init_p = self.mc
+
+            # init_p = get_logit_p(data)
+        self.shares, self.p, self.delta = self.run_price_fixed_point(
             init_p, tol=tol, max_iter=max_iter
         )
 
-        return self.shares, self.p, delta
+        return self.shares, self.p, self.delta
 
-    def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000):
+    def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000, num_draws=1000):
         """
         Find the fixed point of prices using an iterative approach.
         Integrates shares, derivative of shares over distribution of nus.
@@ -154,11 +176,18 @@ class DemandData:
         """
         p = init_p
 
+        nu = np.random.lognormal(
+            mean=self.params["nu"]["mu"],
+            sigma=self.params["nu"]["sigma"],
+            size=num_draws,
+        )
+
         for i in range(max_iter):
-            shares, ds_dp, delta = self.derive_shares(p)
+            shares, ds_dp, delta = self.derive_shares(p, nu_vec=nu)
             # update price according to oligopolistic pricing equation
             p_new = -shares / ds_dp + self.mc
             # if price converges, exit loop, else continue
+            print(f"Diff: {np.abs(p_new - p).max().round(3)}")
             if np.abs(p_new - p).max() < tol:
                 if self.verbose:
                     print(f"Price fixed point converged in {i} iterations.")
@@ -170,7 +199,7 @@ class DemandData:
 
         return shares, p, delta
 
-    def derive_shares(self, p):
+    def derive_shares(self, p, numerically_integrate=True, nu_vec=None):
         """
         Derive market shares and derivative of market shares wrt to prices.
 
@@ -188,17 +217,29 @@ class DemandData:
         """
         betas = np.array(self.params["betas"])
         delta = np.tensordot(betas, self.X, axes=1) - self.params["alpha"] * p + self.xi
-        # numerically integrate over full support of nu distribution
-        shares = quad_vec(
-            lambda nu: self._integrand_probability(nu, delta=delta, p=p),
-            a=0,
-            b=np.inf,
-        )[0]
-        ds_dp = quad_vec(
-            lambda nu: self._integrand_derivative(nu, delta=delta, p=p),
-            a=0,
-            b=np.inf,
-        )[0]
+
+        if numerically_integrate:
+            # numerically integrate over full support of nu distribution
+            shares = quad_vec(
+                lambda nu: self._integrand_probability(nu, delta=delta, p=p),
+                a=0,
+                b=np.inf,
+            )[0]
+            ds_dp = quad_vec(
+                lambda nu: self._integrand_derivative(nu, delta=delta, p=p),
+                a=0,
+                b=np.inf,
+            )[0]
+        else:
+            # simulate data to get probability
+            shares = np.mean(
+                self._integrand_probability_vectorized(delta, p, nu_vec),
+                axis=0,
+            )
+            ds_dp = np.mean(
+                self._integrand_derivative_vectorized(delta, p, nu_vec), axis=0
+            )
+
         return shares, ds_dp, delta
 
     # === Moment Conditions ===

@@ -37,7 +37,7 @@ class DemandData:
     # Initialize products, cost shifters, and shocks
     def _initialize_products(self):
         # construct product characteristics
-        np.random.seed(self.seed)
+        # np.random.seed(self.seed)
         X_dist = self.params["X"]
         X1 = np.ones(self.jm_shape)
         X2 = np.random.uniform(X_dist["X2"]["a"], X_dist["X2"]["b"], self.jm_shape)
@@ -46,7 +46,7 @@ class DemandData:
 
     def _initialize_cost_shifters(self):
         # construct cost shifters
-        np.random.seed(self.seed)
+        # np.random.seed(self.seed)
         cdist = self.params["cost"]
         self.Z = np.random.lognormal(
             cdist["Z"]["mu"], cdist["Z"]["sigma"], self.jm_shape
@@ -56,7 +56,7 @@ class DemandData:
         )
 
     def _initialize_shocks(self):
-        np.random.seed(self.seed)
+        # np.random.seed(self.seed)
         self.xi = np.random.normal(
             self.params["xi"]["mu"], self.params["xi"]["sigma"], self.jm_shape
         )
@@ -199,7 +199,7 @@ class DemandData:
 
         return shares, p, delta
 
-    def derive_shares(self, p, numerically_integrate=True, nu_vec=None):
+    def derive_shares(self, p, numerically_integrate=False, nu_vec=None):
         """
         Derive market shares and derivative of market shares wrt to prices.
 

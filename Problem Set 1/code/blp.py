@@ -35,27 +35,35 @@ class BLP:
             nu, self.params["nu"]["mu"], self.params["nu"]["sigma"]
         )
 
-    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14):
+    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14, num_draws=1000):
         # initialize delta to ones for contraction mapping
         delta = np.ones(self.data.jm_shape)
         true_log_shares = np.log(self.data.shares)
+
+        nu_vec = np.random.lognormal(
+            mean=self.params["nu"]["mu"],
+            sigma=self.params["nu"]["sigma"],
+            size=num_draws,
+        )
+
         for i in range(max_iter):
             # integrate over full nu distribution to get shares
-            shares = quad_vec(
-                lambda nu: self._integrand_probability(
-                    nu, sigma_alpha=sigma_alpha, delta=delta
-                ),
-                a=0,
-                b=np.inf,
-            )[0]
+            shares = np.mean(
+                self.data._integrand_probability_vectorized(delta, self.data.p, nu_vec),
+                axis=0,
+            )
+
             # update delta according to delta += true_log - predicted_log shares
             delta_new = delta + true_log_shares - np.log(shares)
-            if np.abs(delta_new - delta).max() < tol:
+            diff = np.abs(delta_new - delta).max()
+            if diff < tol:
                 break
             delta = delta_new
 
         if i == max_iter - 1:
-            raise Warning("Delta contraction mapping did not converge.")
+            raise Warning(
+                f"Delta contraction mapping did not converge (max diff={diff})."
+            )
 
         return delta
 
@@ -69,7 +77,7 @@ class BLP:
         ).fit()
         coefs = IV_reg.params.values
         betas = coefs[:3]
-        alpha = coefs[3]
+        alpha = -coefs[3]
         return alpha, betas
 
     def _estimate_xi(self, sigma_alpha):
@@ -81,7 +89,7 @@ class BLP:
             self.X_long, delta_long, self.price_long
         )
         # Calculate implied xi hat
-        xi = delta_long - np.dot(self.X_long, betas) - alpha * self.price_long.flatten()
+        xi = delta_long - np.dot(self.X_long, betas) + alpha * self.price_long.flatten()
         return alpha, betas, xi
 
     def _compute_gmm_obj(self, theta, W):

@@ -35,7 +35,15 @@ class BLP:
             nu, self.params["nu"]["mu"], self.params["nu"]["sigma"]
         )
 
-    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14, num_draws=1000):
+    def _integrand_probability_vectorized(self, delta, sigma_alpha, p, nu):
+        delta = delta[None, :, :]
+        nu = nu[:, None, None]
+        num = np.exp(delta - sigma_alpha * nu * p)
+        denom = 1 + np.sum(num, axis=1, keepdims=True)  # shape => (n_nu, 1, M)
+        res = num / denom  # shape => (n_nu, J, M)
+        return res
+
+    def _invert_shares(self, sigma_alpha, max_iter=1000, tol=1e-14):
         # initialize delta to ones for contraction mapping
         delta = np.ones(self.data.jm_shape)
         true_log_shares = np.log(self.data.shares)
@@ -43,13 +51,15 @@ class BLP:
         nu_vec = np.random.lognormal(
             mean=self.params["nu"]["mu"],
             sigma=self.params["nu"]["sigma"],
-            size=num_draws,
+            size=self.params["nu"]["n_draws"],
         )
 
         for i in range(max_iter):
             # integrate over full nu distribution to get shares
             shares = np.mean(
-                self.data._integrand_probability_vectorized(delta, self.data.p, nu_vec),
+                self._integrand_probability_vectorized(
+                    delta, sigma_alpha, self.data.p, nu_vec
+                ),
                 axis=0,
             )
 

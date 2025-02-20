@@ -6,7 +6,6 @@ Date: 03/01/25
 
 import numpy as np
 from scipy.integrate import quad_vec
-from tqdm import tqdm
 
 from utils import calc_nu_dist
 

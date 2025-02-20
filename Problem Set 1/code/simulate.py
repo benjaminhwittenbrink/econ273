@@ -4,21 +4,19 @@ Author: Benjamin Wittenbrink, Jack Kelly, Veronica Backer Peral
 Date: 03/01/25
 """
 
+import logging
 import numpy as np
 from scipy.integrate import quad_vec
 
 from utils import calc_nu_dist
+
+logger = logging.getLogger(__name__)
 
 
 class DemandData:
 
     def __init__(self, params, seed=14_273, verbose=False):
         self.params = params
-
-        # self.params["sigma_alpha"] = 0
-        # self.params["M"] = 1
-        # self.params["J"] = 4
-
         self.seed = seed
         self.verbose = verbose
         self.jm_shape = (self.params["J"], self.params["M"])
@@ -31,12 +29,13 @@ class DemandData:
         self.eta = None
         self.mc = None
 
+        np.random.seed(self.seed)
+
     # === Helper Methods ===
 
     # Initialize products, cost shifters, and shocks
     def _initialize_products(self):
         # construct product characteristics
-        # np.random.seed(self.seed)
         X_dist = self.params["X"]
         X1 = np.ones(self.jm_shape)
         X2 = np.random.uniform(X_dist["X2"]["a"], X_dist["X2"]["b"], self.jm_shape)
@@ -45,7 +44,6 @@ class DemandData:
 
     def _initialize_cost_shifters(self):
         # construct cost shifters
-        # np.random.seed(self.seed)
         cdist = self.params["cost"]
         self.Z = np.random.lognormal(
             cdist["Z"]["mu"], cdist["Z"]["sigma"], self.jm_shape
@@ -55,7 +53,6 @@ class DemandData:
         )
 
     def _initialize_shocks(self):
-        # np.random.seed(self.seed)
         self.xi = np.random.normal(
             self.params["xi"]["mu"], self.params["xi"]["sigma"], self.jm_shape
         )
@@ -186,10 +183,9 @@ class DemandData:
             # update price according to oligopolistic pricing equation
             p_new = -shares / ds_dp + self.mc
             # if price converges, exit loop, else continue
-            print(f"Diff: {np.abs(p_new - p).max().round(3)}")
             if np.abs(p_new - p).max() < tol:
                 if self.verbose:
-                    print(f"Price fixed point converged in {i} iterations.")
+                    logger.info(f"Price fixed point converged in {i} iterations.")
                 break
             p = p_new
 

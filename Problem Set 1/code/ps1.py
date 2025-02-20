@@ -36,17 +36,11 @@ with open("params.toml", "r") as file:
 print(params)
 
 # %%
-# set seed
-np.random.seed(14_273)
-
-# %%
 # generate simulated data given params
 data = simulate.DemandData(params, seed=14_273, verbose=True)
 
 # %%
 s, p, delta = data.simulate()
-
-# %%
 
 # %%
 res = data.compute_empirical_moments()
@@ -72,4 +66,4 @@ print(f"alpha_hat: {np.round(alpha_hat, 5)} vs. {params['alpha']}")
 print(f"beta_hat: {np.round(beta_hat, 5)} vs. {params['betas']}")
 print(f"sigma_alpha_hat: {np.round(sigma_alpha_hat, 5)} vs. {params['sigma_alpha']}")
 
-# # %%
+# %%

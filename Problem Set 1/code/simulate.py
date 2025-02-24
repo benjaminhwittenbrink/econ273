@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 
 class DemandData:
 
-    def __init__(self, params, seed=14_273, verbose=False):
+    def __init__(self, params, seed=14_273, numerically_integrate=False, verbose=False):
         self.params = params
         self.seed = seed
         self.verbose = verbose
+        self.numerically_integrate = numerically_integrate
         self.jm_shape = (self.params["J"], self.params["M"])
 
         # initialize data attributes
@@ -75,7 +76,10 @@ class DemandData:
         self.nu = np.random.lognormal(
             mean=self.params["nu"]["mu"],
             sigma=self.params["nu"]["sigma"],
-            size=1000,
+            size=(
+                self.params["nu"]["n_draws"],
+                self.params["M"],
+            ),
         )
 
     # Helper methods to calculate shares
@@ -104,17 +108,19 @@ class DemandData:
         res *= calc_nu_dist(nu, self.params["nu"]["mu"], self.params["nu"]["sigma"])
         return res
 
-    def _integrand_probability_vectorized(self, delta, p, nu):
+    def _integrand_probability_simulation(self, delta, p, nu):
         delta = delta[None, :, :]
-        nu = nu[:, None, None]
+        # nu = nu[:, None, None]
+        nu = nu[:, None, :]
         num = self._calc_util(p, nu, delta)  # shape => (n_nu, J, M)
         denom = 1 + np.sum(num, axis=1, keepdims=True)  # shape => (n_nu, 1, M)
         res = num / denom  # shape => (n_nu, J, M)
         return res
 
-    def _integrand_derivative_vectorized(self, delta, p, nu):
+    def _integrand_derivative_simulation(self, delta, p, nu):
         delta = delta[None, :, :]
-        nu = nu[:, None, None]
+        # nu = nu[:, None, None]
+        nu = nu[:, None, :]
         util = self._calc_util(p, nu, delta)
         tot_util = 1 + np.sum(util, axis=1, keepdims=True)
         num = tot_util - util
@@ -196,7 +202,7 @@ class DemandData:
 
         return shares, p, delta
 
-    def derive_shares(self, p, numerically_integrate=False, nu_vec=None):
+    def derive_shares(self, p, nu_vec=None):
         """
         Derive market shares and derivative of market shares wrt to prices.
 
@@ -215,7 +221,7 @@ class DemandData:
         betas = np.array(self.params["betas"])
         delta = np.tensordot(betas, self.X, axes=1) - self.params["alpha"] * p + self.xi
 
-        if numerically_integrate:
+        if self.numerically_integrate:
             # numerically integrate over full support of nu distribution
             shares = quad_vec(
                 lambda nu: self._integrand_probability(nu, delta=delta, p=p),
@@ -230,11 +236,11 @@ class DemandData:
         else:
             # simulate data to get probability
             shares = np.mean(
-                self._integrand_probability_vectorized(delta, p, nu_vec),
+                self._integrand_probability_simulation(delta, p, nu_vec),
                 axis=0,
             )
             ds_dp = np.mean(
-                self._integrand_derivative_vectorized(delta, p, nu_vec), axis=0
+                self._integrand_derivative_simulation(delta, p, nu_vec), axis=0
             )
 
         return shares, ds_dp, delta

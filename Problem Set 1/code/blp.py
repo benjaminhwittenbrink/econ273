@@ -42,7 +42,8 @@ class BLP:
 
     def _integrand_probability_simulation(self, delta, sigma_alpha, p, nu_vec):
         delta = delta[None, :, :]
-        nu_vec = nu_vec[:, None, None]
+        # nu_vec = nu_vec[:, None, None]
+        nu_vec = nu_vec[:, None, :]
         num = np.exp(delta - sigma_alpha * nu_vec * p)
         denom = 1 + np.sum(num, axis=1, keepdims=True)  # shape => (n_nu, 1, M)
         res = num / denom  # shape => (n_nu, J, M)
@@ -57,7 +58,7 @@ class BLP:
             nu_vec = np.random.lognormal(
                 mean=self.params["nu"]["mu"],
                 sigma=self.params["nu"]["sigma"],
-                size=self.params["nu"]["n_draws"],
+                size=(self.params["nu"]["n_draws"], self.params["M"]),
             )
 
         for i in range(self.max_iter):
@@ -82,9 +83,16 @@ class BLP:
             delta_new = delta + true_log_shares - np.log(shares)
             diff = np.abs(delta_new - delta).max()
             if diff < tol:
+                logger.info(f"Sigma = {sigma_alpha}")
                 break
             elif i % 500 == 0 and i != 0:  # print progress every 500 iterations
+                diff_old = diff
                 logger.info(f"Iteration {i}: max diff = {diff} (tol={tol})")
+                if (diff_old - diff) < 1e-13:
+                    logger.info(
+                        f"Delta contraction mapping is converging slowly. Skipping. (sigma = {sigma_alpha})"
+                    )
+                    break
             delta = delta_new
 
         if i == self.max_iter - 1:
@@ -173,7 +181,7 @@ class BLP:
             # nu_vec = np.random.lognormal(
             #     mean=self.params["nu"]["mu"],
             #     sigma=self.params["nu"]["sigma"],
-            #     size=self.params["nu"]["n_draws"],
+            #     size=(self.params["nu"]["n_draws"], self.params["M"]),
             # )
             nu_vec = None
 
@@ -189,7 +197,7 @@ class BLP:
             ),
             tol=self.tol,
             method="L-BFGS-B",
-            bounds=[(1e-14, None)],
+            bounds=[(1e-2, None)],
         )
         sigma_alpha = results.x[0]
         if self.verbose:
@@ -208,7 +216,7 @@ class BLP:
             ),
             tol=self.tol,
             method="L-BFGS-B",
-            bounds=[(1e-14, None)],
+            bounds=[(1e-2, None)],
         )
         sigma_alpha = results.x[0]
         if self.verbose:

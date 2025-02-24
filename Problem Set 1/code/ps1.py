@@ -56,9 +56,12 @@ res = data.compute_empirical_moments()
 #     res_l.append(res)
 
 # %%
+# choosing new random seed for BLP just to make sure we have no endogeneity
+np.random.seed(100)
+# %%
 reload(blp)
 # %%
-blp_est = blp.BLP(data, tol=1e-14, verbose=True)
+blp_est = blp.BLP(data, tol=1e-14, numerically_integrate=False, verbose=True)
 # %%
 alpha_hat, beta_hat, sigma_alpha_hat = blp_est.run_gmm_2stage()
 # %%

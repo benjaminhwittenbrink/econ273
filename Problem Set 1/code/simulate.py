@@ -71,6 +71,13 @@ class DemandData:
             + self.eta
         )
 
+    def _initialize_consumer_simulation(self):
+        self.nu = np.random.lognormal(
+            mean=self.params["nu"]["mu"],
+            sigma=self.params["nu"]["sigma"],
+            size=1000,
+        )
+
     # Helper methods to calculate shares
     def _calc_util(self, p, nu, delta):
         return np.exp(delta - self.params["sigma_alpha"] * nu * p)
@@ -134,6 +141,7 @@ class DemandData:
         self._initialize_cost_shifters()
         self._initialize_shocks()
         self._set_marginal_cost()
+        self._initialize_consumer_simulation()
 
         if init_p is None:
             init_p = self.mc
@@ -145,7 +153,7 @@ class DemandData:
 
         return self.shares, self.p, self.delta
 
-    def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000, num_draws=1000):
+    def run_price_fixed_point(self, init_p, tol=1e-6, max_iter=1000):
         """
         Find the fixed point of prices using an iterative approach.
         Integrates shares, derivative of shares over distribution of nus.
@@ -172,14 +180,8 @@ class DemandData:
         """
         p = init_p
 
-        nu = np.random.lognormal(
-            mean=self.params["nu"]["mu"],
-            sigma=self.params["nu"]["sigma"],
-            size=num_draws,
-        )
-
         for i in range(max_iter):
-            shares, ds_dp, delta = self.derive_shares(p, nu_vec=nu)
+            shares, ds_dp, delta = self.derive_shares(p, nu_vec=self.nu)
             # update price according to oligopolistic pricing equation
             p_new = -shares / ds_dp + self.mc
             # if price converges, exit loop, else continue

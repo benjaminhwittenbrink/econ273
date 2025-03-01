@@ -37,7 +37,7 @@ print(params)
 
 # %%
 # generate simulated data given params
-data = simulate.DemandData(params, seed=14_273, verbose=True)
+data = simulate.DemandData(params, seed=3, verbose=True)
 
 # %%
 s, p, delta = data.simulate()
@@ -57,7 +57,7 @@ res = data.compute_empirical_moments()
 
 # %%
 # choosing new random seed for BLP just to make sure we have no endogeneity
-np.random.seed(5)
+np.random.seed(14_273)
 # %%
 reload(blp)
 # %%

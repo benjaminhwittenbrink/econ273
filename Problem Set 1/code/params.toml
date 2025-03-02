@@ -3,7 +3,7 @@ M = 100
 J = 3
 
 # demand side parameters 
-betas = [5, 1, 1]
+betas = [5, 10, 1]
 alpha = 1
 sigma_alpha = 1
 

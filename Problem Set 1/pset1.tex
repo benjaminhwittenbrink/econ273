@@ -1,6 +1,10 @@
 \documentclass{article}
 \usepackage{graphicx}
 \usepackage{amsmath}
+\usepackage{bm}
+\usepackage[parfill]{parskip}
+
+\input{macros}
 
 \title{14.273 IO Problem Set 1}
 \author{Benjamin Wittenbrink, Jack Kelly, and Veronicá Bäcker-Peral}
@@ -10,7 +14,10 @@
 
 \maketitle
 
-\section{Demand}
+\section*{Problem 0: Simulate Data}
+\begin{answer}
+
+In this section, we will generate simulated data for our setting. To begin, we outline the problem.
 
 Consider a market with $m = 1, \dots, 100$ and products $j = 1, 2, 3$. Consumer $i$'s utility for product $j$ in market $m$ is given by 
 \begin{align}
@@ -18,22 +25,715 @@ Consider a market with $m = 1, \dots, 100$ and products $j = 1, 2, 3$. Consumer 
     \alpha_i &= \alpha + \sigma_\alpha \nu_{ip} \\ 
     U_{i0m} &= \epsilon_{i0m}. 
 \end{align}
-
 Let $\delta_{jm}$ be the mean utility, defined as 
 \begin{equation}
     \delta_{jm} = X_{jm} \beta - \alpha p_{jm} + \xi_{jm}. 
 \end{equation}
 Then we can write utility as 
 \[
-U_{ijm} = \delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm} + \epsilon_{ijm}.
+U_{ijm} = \delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm} + \epsilon_{ijm} \equiv V_{ijm} + \epsilon_{ijm}.
 \]
 
-Since $\epsilon$ is distributed according to Type 1 Extreme Value distribution, we can write the probability that consumer $i$ purchases product $j$ in market $m$ as 
-\[
+Since $\epsilon$ is distributed according to Type 1 Extreme Value distribution, the probability that consumer $i$ with a price coefficient of $\sigma_\alpha + \nu_{ip}$ purchases product $j$ in market $m$ is given by 
+\begin{equation}\label{p0_proba}
     P_{ijm} = \frac{\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm})}{
     1 + \sum_{k=1}^3 \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})
     }.
+\end{equation}
+Then, integrating over idiosyncratic (dis)taste for price $\nu_{ip}$, the overall product shares in a given market can be written as 
+\begin{equation}\label{p0_share}
+    s_{jm} = \int P_{ijm} d F(\nu).
+\end{equation} 
+where $F(\nu)$ is the standard lognormal CDF.
+Thus, Equation \ref{p0_share} expresses the market shares $s_{jm}$ as a function of the mean utilities $\delta_{jm}$. 
+%We compute this quantity by numerically integrating it over the full support of the log normal distribution. 
+
+Firms behave oligopolistically in each market, and set price according to 
+\begin{equation}
+    \frac{p_{jm} - MC_{jm}}{p_{jm}} = \frac{-1}{\frac{d \ln s_{jm}}{d \ln p_{jm}}}
+\end{equation}
+where 
+\begin{equation}\label{p0_mc}
+    MC_{jm} = \gamma_0 + \gamma_1 W_j + \gamma_2 Z_{jm} + \eta_{jm}.
+\end{equation}
+Then, using $\frac{d \ln s_{jm}}{d \ln p_{jm}} = \frac{d s_{jm}}{d p_{jm}} \frac{p_{jm}}{s_{jm}}$, we derive the following pricing rule: 
+\begin{equation}\label{po_pricing}
+    p_{jm} = - \frac{s_{jm}}{\frac{d s_{jm}}{d p_{jm}} } +  MC_{jm}.
+\end{equation}
+From Equation \ref{p0_share} we have an expression for $s_{jm}$ and from Equation \ref{p0_mc} for $MC_{jm}$. Thus, we just need to calculate $d s_{jm} / d p_{jm}$, which we do below: 
+\begin{equation}\label{p0_share_own_deriv}
+    % \frac{d s_{jm}}{d p_{jm}} = -\int \frac{1 + \sum_{k \neq j} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})}{\left(1 + \sum_{k} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})\right)^2} \left(\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}) (\alpha + \sigma_\alpha \nu_{ip})\right) d F(\nu)
+    \frac{d s_{jm}}{d p_{jm}} = -\int \frac{1 + \sum_{k \neq j} \exp(V_{ikm})}{\left(1 + \sum_{k} V_{ikm})\right)^2} \left(\exp(V_{ijm}) (\alpha + \sigma_\alpha \nu_{ip})\right) d F(\nu)
+\end{equation}
+where $V_{ijm} \equiv \delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}$ as before. 
+
+\end{answer}
+
+\section*{Problem 1: BLP and Hausman Instruments}
+
+\begin{enumerate}
+\item \textbf{Moment Conditions:} Consider the following conditional moment restrictions:
+\[
+E[\xi \mid X ] = 0, \quad E[\xi \mid p ] = 0, \quad E[\xi \mid W, Z ] = 0.
 \]
-Then the shares can be written as $s_{jm} = \int P_{ijm} d F(\nu)$. 
+\begin{enumerate}
+    \item Discuss which of these moment conditions are valid and relevant given that you know the true model. Explain your reasoning.
+\begin{answer}
+
+We will have that $E[\xi|X]=0$ and $E[\xi|W,Z]=0$ since these are all drawn independently. However, we will have $E[\xi|p]\neq 0$ because the price is a function of demand. 
+
+\end{answer}
+    
+    \item  Compute the empirical counterparts of the moments
+    \[
+    E[\xi_{jm} X_{jm}], \quad E[\xi_{jm} \bar{X}_{jm}], \quad E[\xi_{jm} p_{jm}], \quad E[\xi_{jm} \bar{p}_{jm}],
+    \]
+    where $\bar{X}_{jm}$ and $\bar{p}_{jm}$ denote the average characteristics and prices of the competing products in the same market.
+\begin{answer}
+
+    See code for the estimation. We obtain the following estimates: 
+    \begin{itemize}
+        \item $E[\xi_{jm} X_{jm}] = [-0.02, -0.00,  0.06]$
+        \item $E[\xi_{jm} \bar{X}_{jm}] = [-0.02, -0.01,  0.01]$
+        \item $E[\xi_{jm} p_{jm}] = -0.39$
+        \item $E[\xi_{jm} \bar{p}_{jm}] = -0.41$
+        
+    \end{itemize}
+
+We were concerned about the fact that $E[\xi_{jm}p_{jm}]<0$, as theory would obviously predict the opposite: better goods should have higher prices! (Given that firms know $\xi$ and have market power so can price above marginal cost). 
+
+To confirm that this is an artifact of having a small number of firms $(J=3)$ in our data, we run two exercises. First, we calculate the distribution of $E(\xi_{jm}p_{jm}|m)$  across markets and find it to be on average positive. Therefore, our results are probably skewed by a few outlier markets. 
+
+Second, we redo our entire simulation exercise 100 times and take the mean $E(\xi_{jm}p_{jm})$ across simulation runs. We get an average correlation that is positive, but a large standard error (i.e., standard deviation across draws), further suggesting that idiosyncratic variation from the small number of products drives our findings. 
+
+\end{answer}
+
+    
+\item Discuss the use of BLP instruments (based on competitor characteristics) versus
+Hausman instruments (based on cost shifters) in this setting. What are the advantages
+and drawbacks of each instrument set for identifying the demand-side parameters?
+
+\begin{answer}
+Cost-shifter instruments are generally preferred to competitor characteristic instruments. This is because competitor characteristics may affect a firm's choice of products, which would in turn be related to consumers demand for the product. In this case, however, we have constructed the data so that both sets of instruments will be equally effective.
+
+Another general advantage of cost shifter instruments over BLP is that they work well regardless of the number of  products $J$ in a market. If $J$ is large, then the BLP instruments have essentially no within-market variation, since the leave out mean with respect to one firm $j$ will differ little across $j$. This can create a weak instruments problem. Again, however, in our setting this is unlikely to be an issue as $J$ is small (3).  
+\end{answer}
+    
+\end{enumerate}
+\item \textbf{BLP Estimation:} Estimate the demand parameters $\theta = (\beta, \alpha, \sigma_\alpha)$ using the BLP approach. In your estimation, use instruments based on:
+\begin{itemize}
+    \item Competitor characteristics (i.e., assuming $E[\xi_{jm} \mid X_{-jm}] = 0$).
+    \item Cost shifters (i.e., $E[\xi_{jm} \mid W_j, Z_{jm}] = 0$).
+    Do \textit{not} impose any supply-side restrictions in this part.
+\end{itemize}
+
+\begin{enumerate}
+    \item Write down the moment conditions and construct the corresponding GMM objective
+function.
+\begin{answer}
+Note that $E[\xi_{jm} | X_{-j,m}] \implies E[\xi_{jm} X_{-j,m}]=0$ using that $E[\xi_{jm} X_{-j,m}]= E[X_{-jm} E[\xi_{jm} |X_{-j,m}]]=E[0]=0$ by the LIE. Similarly, $E[\xi_{jm} | W_j,Z_{jm}] \implies E[\xi_{jm}W_j] = 0, E[\xi_{jm} Z_{jm}]=0$ using LIE $E[\xi_{jm} W_{j}]= E[W_{j} E[\xi_{jm} |W_{j}]]= 0$,  since $E[\xi_{jm} |W_{j}] = E[E[\xi_{jm} |W_{j},Z_{{jm}}]|Z_{jm}] =0, \forall W_{j} $ (and an analogous derivation for $Z_{j,m} )$. So our unconditional moment conditions are 
+    $$  E[\xi_{jm} X_{-j,m}]=0,E[\xi_{jm}W_j] = 0, E[\xi_{jm} Z_{jm}]=0 $$
+
+    Note that since $X$ is three dimensional, we have 5 moment conditions overall, and we have three parameters: $\beta, \alpha, \sigma_{\alpha}$. So, we are overidentified, and GMM is a natural procedure to extract all the information available from our set of instruments. 
+
+    In particular, our GMM objective takes the following form:
+
+    $$ \arg \min_{\beta,\alpha,\sigma_{\alpha}} \left( \frac{1}{JM} \sum_{j,m} \hat \xi_{j,m}H_{j,m} \right)^\prime \hat W \left( \frac{1}{JM} \sum_{j,m} \hat\xi_{j,m}H_{j,m} \right)$$ where $H$ is the matrix of instruments $X_{-jm}, W_j, Z_{jm}$, and $\hat W$ is our consistent estimator for a positive definite weighting matrix. The $\hat \xi_{j,m}H_{j,m}$ indicates that we are using the estimating shares that rationalize the market shares.
+
+    The most efficient weighting matrix $W$ would be the inverse of the variance-covariance matrix of our moment conditions. However, that matrix depends on the true parameters, which we are estimating given $W$. To avoid this chicken-and-the-egg problem, we run two step GMM, initially satting
+    $\hat W_1 = I_{5}$. Then, after we obtain the first GMM estimate of the parameters $\hat 
+\theta_1$, we  compute $\hat W_{2} = (\frac{1}{JM}\sum_{j,m}H_{jm}^\prime\hat\xi_1\hat\xi_1^\prime H_{jm})^{-1}$ where $\hat\xi_1$ is our estimated residual vector from the first step. Then, we form $\hat\xi_2$ by rerunning the GMM minimization with $\hat W_2$ instead of $\hat W_1$. The logic is that even though the first step GMM is inefficient, $\hat W_{2}$ is consistent for the true inverse VCV matrix by standard arguments. So, using it in the second step yields an asymptotically efficient estimator. 
+\end{answer}
+    
+\item Estimate $\theta$ and report the point estimates for each parameter.
+
+\begin{answer}
+
+We run the code in \texttt{ps1.py} (see attached) and obtain the following parameters (rounded to nearest 2 decimals): 
+\begin{itemize}
+    \item $\hat{\alpha} = 1.02$;
+    \item $\hat{\beta} = [5.09, 1.10, 1.06]$; 
+    \item $\sigma_\alpha = 1.00$.
+\end{itemize}
+
+\end{answer}
+
+\item Derive the expression for the asymptotic standard errors. Provide pseudocode that
+outlines how you would implement a function to compute these standard errors.
+\begin{answer}
+
+
+First some housekeeping: we adapt some notation from BLP/the slides for our setting where we have both multiple products $j$ and markets $m$.
+
+Let $$G_{JM}(\theta,s^0,P_0)= \frac{1}{JM} \sum_{j,m\in\mathcal{J}\times \mathcal{M}}H_{jm}(z)T(z_{jm})\xi_{jm}(\theta,s^0,P_0)$$
+where $H_{jm}$ collects our instruments, $\xi_{jm}(\theta,s^0,P_0)$ is the unobserved product characteristics, and $T(z_{jm})$ is a matrix that satisfies $T(z_{jm})^\prime T(z_{jm}) = E(\xi_{jm}^2|z)^{-1} =\Omega(z_{jm})$ (the expression simplifies from BLP because, without the supply side moments, $\Omega$  becomes one dimensional). Furthermore, since our errors are i.i.d, $\Omega$ does not depend on $z$ and we can set $T(z_{jm}) = \frac{1}{\sigma_\xi}, \forall j,m$ where $\sigma_\xi$ is the standard deviation of $\xi$, using that $\xi$ is mean 0. Our GMM procedure outlined in step (a), which is what BLP run and use to derive their standard errors, is numerically equivalent to running GMM with no weighting matrix and objective function $G_{JM}^\prime G_{JM}$ with $T(z_{mj})$ calculated via two-step, XX there's a small wrinkle here that I'm ignoring regarding homoskedasticity/heteroskedasticity
+
+With this setup out of the way, the general expression for BLP standard errors is 
+
+$$ (\Gamma^\prime \Gamma)^{-1}\Gamma^\prime(V_1 + V_3) \Gamma (\Gamma^\prime \Gamma)^{-1}$$
+where we have omitted $V_2$, the portion that depends only on having a finite number of consumers from which we calculate the shares, since here we directly simulate the shares, implicitly assuming infinite consumers. 
+
+Meanwhile, 
+\begin{align*}
+  \Gamma &= \lim_{J \to \infty} \frac{\partial E(G_{JM}(\theta,s_0,P_0)}{\partial \theta^\prime }|_{\theta=\theta_0}  \\
+  V_1 &= Var[H_{jm}(z)T(z_{jm})\xi_{jm}(\theta_0,s^0,P_0)] \\
+  V_3 &= \frac{JM}{ns}Var[\sqrt{ns} (G_{JM}(\theta_0,s^n,P_{ns})-G_{JM}(\theta_0,s^n,P_0)],
+\end{align*}
+(in BLP $m=1$ so the indexing is only by $j$).
+
+ We next delve into how each term analytically simplifies in our context and can be estimated (with pseudocode provided) in the proceeding sections. 
+
+\subsubsection*{Estimating $\Gamma$}
+
+We turn first to estimating $\Gamma$. We note that under mild regularity conditions satisfied in this problem, we can interchange expectations and derivatives to obtain 
+$$\Gamma= \lim_{J \to \infty} E\left[\frac{\partial G_{JM}(\theta^0,s_0,P_0)}{\partial \theta^\prime }|_{\theta=\theta_0}\right].$$
+Next we compute the gradient inside the expectation. We note first that $H_j(z)T(z_j)$ do not depend on the parameters, so $$\frac{\partial G_{JM}(\theta^0,s_0,P_0)}{\partial \theta^\prime }= 
+ \frac{1}{JM} \sum_{j,m\in\mathcal{J}\times \mathcal{M}}H_{jm}(z)T(z_{mj})\
+\frac{\partial \xi_{mj}(\theta,s^0,P_0)}{\partial \theta^\prime }$$
+
+For $\frac{\partial \xi_{mj}(\theta,s^0,P_0)}{\partial \theta^\prime}$, we note that $\xi_{j,m}= \delta_{jm}- X_{jm}^\prime \beta + p_{jm}\alpha  $, so  $\frac{\partial \xi_{mj}(\theta,s^0,P_0)}{\partial \beta} = X_{jm}^\prime $ and $\frac{\partial \xi_{mj}(\theta,s^0,P_0)}{\partial \alpha} = p_{jm} .$ 
+
+The partial derivative with respect to $\sigma_\alpha$ is more complicated, and has no closed form. In practice, it could be estimated via numerical integration, which is what we will do in our pseudocode. In principle however, it can be pinned down using implicit differentiation and the same contraction-mapping logic used to identify $\delta_{jm}$. Note that the derivative of $\xi_{jm}$ with respect to $\sigma_\alpha$ depends on the parameter only through $\delta_{jm}$. And recall that $$s_{jm}=\int  \frac{\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm})}{
+    1 + \sum_{k=1}^3 \exp(\delta_{km} - \sigma_\alpha \nu_{ip}p_{km} )
+    }dF(\nu_{ip})$$
+where $F_{\mu_{im}}$ is the standard lognormal CDF.
+Implicitly differentiating, 
+$$0=\int (\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}) \frac{\frac{d\delta_{jm}}{d\sigma_{\alpha}}-v_{ip}p_{jm} -\sum_k \exp(\delta_{km} - \sigma_\alpha \nu_{ip}p_{km} )(\frac{d\delta_{km}}{d\sigma_{\alpha}}- \nu_{ip}p_{km})}{ \left(1 + \sum_{k=1}^3 \exp(\delta_{km} - \sigma_\alpha \nu_{ip}p_{km} )
+    \right)^2}dF(\nu_{ip})$$
+
+which can be solved for $\frac{d \delta_{jm}}{d \sigma_\alpha}$ using a similar fixed point algorithm as for the main BLP contraction mapping. 
+
+
+Overall then, using our previous characterization of $T(z_{ij})$, we have that  $$\Gamma= \lim_{J \to \infty} E[\frac{1}{JM \times \sigma_\xi} \sum_{j,m\in\mathcal{J}\times \mathcal{M}}H_{jm}(z) \
+(\frac{d\xi_{jm}}{d\sigma_\alpha} \:\:\: X_{jm}^\prime \:\:\:p_{jm})$$
+
+Of course, this is just the asymptotic expression, so in finite samples we approximate using our consistent estimate $\hat{\sigma}_\xi$ (the sample standard deviation of our residuals) and the estimated $d\xi_{jm}/d\sigma_\alpha$ terms (where estimation here comes both from our computation of the derivative numerically/by the  fixed point algorithm and from the fact we evaluate it at $\hat{\sigma}_{\alpha}$ rather than the unknown true $\sigma_\alpha$). 
+
+The following pseudocode shows how to estimate $\Gamma$:
+
+
+\begin{verbatim}
+# first a helper function
+def  _numerically_differentiate(data, bandwidth, sigma alpha from GMM ,
+alpha and beta from GMM):
+    # function that forms xi's given data and a guess of sigma_alpha 
+    xi_high = get_xi(data, sigma alpha from GMM + bandwidth, 
+    alpha and beta from GMM) 
+    xi_low  = get_xi(data, sigma alpha from GMM - bandwidth, 
+    alpha and beta from GMM) 
+    dxi_dsigma_alpha = xi_high-xi_low/(2*bandwidth)
+    return dxi_dsigma_alpha
+
+# main gamma making function 
+def make_gamma(data, bandwidth, sigma alpha from GMM):
+    dxi_dsigma_alpha = _numerically_differentiate(data, bandwidth, 
+    sigma alpha from GMM, alpha and beta from GMM)
+    est_xi_sd = sd(get_xi(data, sigma alpha from GMM, 
+    alpha and beta from GMM))
+    objective_function = data[H]* (dxi_dsigma_alpha data[X].T data[p])
+    gamma = mean(objective_function)/est_xi_sd
+    return gamma
+\end{verbatim}
+
+
+
+\subsubsection*{Estimating $V_1$}
+Recall $$V_1 = Var[H_{jm}(z)T(z_{jm})\xi_{jm}(\theta_0,s^0,P_0)]$$
+Using our characterization of $T(z_{jm})$ this is 
+ $$V_1 = \frac{1}{\sigma^2_\xi}Var[H_{jm}(z)\xi_{jm}(\theta_0,s^0,P_0)]$$
+
+ which we estimate by plug in analog
+
+  $$\hat{V}_1 = \frac{1}{JM \hat \sigma^2_\xi}\sum_{j,m\in \mathcal{J}\times \mathcal{M}} H_{jm}(z)\hat{\xi}_{jm}(\hat\theta_0,s^n,P_{ns})^2 H_{jm}(z)^\prime$$
+
+  The following pseudocode computes $V_1$
+\begin{verbatim}
+
+def  _make_V1(data, all params from GMM)
+    xi_hats = get_xi(all params from GMM)
+    est_xi_var = var(get_xi(data, all params from GMM, 
+    objective function = data[H]*xi_hats.T*xi_hats*data[H].T
+    V1 = mean(objective_function)/est_xi_var
+    return V1
+ \end{verbatim}
+
+ \subsubsection*{Estimating $V_3$}
+
+Recall $$V_3 = \frac{JM}{ns}Var[\sqrt{ns} (G_{JM}(\theta_0,s^n,P_{ns})-G_{JM}(\theta_0,s^n,P_0)]$$
+
+$$ = JM \times Var[(G_{JM}(\theta_0,s^n,P_{ns})-G_{JM}(\theta_0,s^n,P_0)] $$
+
+Using our expression for $G_{JM}$ above, this is 
+
+$$ = \frac{JM}{\sigma^2_\xi} \times Var[\frac{1}{JM } \sum_{j,m\in\mathcal{J}\times \mathcal{M}}H_{jm}(z) \xi(\theta_0,s^n,P_{ns})]$$
+
+
+using that $G_{JM}(\theta^0,s^n,P_0)$ is a constant (w.r.t the sampling process over which the variance is taken).
+
+We can estimate this by a Bootstrap/Monte Carlo approach. In particular, we redraw $P_{ns}$ many times by drawing ${ns}$ standard lognormal draws $L$ times and, for each draw $l$, forming $\xi(\hat{\theta}_0,s^n,P^l_{ns})$ where $\hat{\theta}_0$ is our BLP estimate. We then take the empirical variance over these $l$ draws and estimate $\sigma_{\xi}^2$ with its sample analog as before. Note that by taking the variance of the bootstrap draws, we are implicitly recentering them (rather than centering them relative to $G_{JM}(\hat{\theta}_0,s^n,P_{ns})$. 
+ The following pseudocode shows how to estimate V3.
+\begin{verbatim}
+
+def  _make_V3(data, all params from GMM, sim_times, sim_draws):
+    xi_hats = get_xi(all params from GMM)
+    est_xi_var = var(get_xi(data, all params from GMM
+    sims = []
+    for l in range(sim_times):
+        nu_draw_l = np.random.lognormal(size = sim_draws)
+        G_l = GMM_objective_function(data, all params from GMM, nu_draw_l) 
+        # function that computes GMM objective function given data and parameter 
+        # values by forming the xi's using BLP approach 
+        sims.append(G_l)
+    V3 = np.var(sims)*JM/est_xi_var
+    return V3
+ \end{verbatim}
+
+\subsubsection*{Standard Errors: Putting it all together}
+The following pseudocode is simply a wrapper for the above functions that then forms the overall standard error after having run BLP and storing all parameters
+\begin{verbatim}
+
+def  _make_VCV(data, all params from GMM, sim_times, sim_draws, bandwidth):
+   gamma = _make_gamma(data, bandwidth, sigma alpha from GMM)
+   V1 =  _make_V1(data, all params from GMM)
+   V3 =  _make_V3(data, all params from GMM, sim_times, sim_draws)
+   VCV = np.inv(gamma.T@gamma)@gamma.T@(V1+ V3)@gamma@np.inv(gamma.T@gamma)
+   standard_errors = (np.diag(VCV))**(1/2)
+   return VCV, standard_errors
+ \end{verbatim}
+ 
+\end{answer}
+
+
+\item Write the expressions for the own-price and cross-price elasticities of demand. Include pseudocode for a function that calculates these elasticities.
+
+\begin{answer}
+In Problem 0, we calculated the derivative of shares with respect to own price $\frac{d s_{jm}}{d p_{jm}}$ (see Equation \ref{p0_share_own_deriv}). Recall that the own-price elasticity is defined as $\frac{d \ln s_{jm}}{d \ln p_{jm}} = \frac{p_{jm}}{s_{jm}}\frac{d s_{jm}}{d p_{jm}}$. Thus, we have that the own-price elasticity is given as 
+\begin{equation}\label{p1_elas_own_price}
+    \epsilon_{jm} = -\frac{p_{jm}}{s_{jm}}
+    \int \frac{1 + \sum_{k \neq j} \exp(V_{ikm})}{\left(1 + \sum_{k} V_{ikm})\right)^2} \left(\exp(V_{ijm}) (\alpha + \sigma_\alpha \nu_{ip})\right) d F(\nu)
+\end{equation}
+where, as before, $V_{ijm} \equiv \delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}$. 
+%We already derived the own price elasticities in Problem  0 :
+%@JACK: why are there l's here? 
+ %  $$ \frac{p_{lm}}{s_{jm}} \frac{d s_{jm}}{d p_{lm}} =- \frac{p_{lm}}{s_{jm}} \int \frac{1 + \sum_{k \neq j} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})}{\left(1 + \sum_{k} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})\right)^2} \left(\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}) (\alpha + \sigma_\alpha \nu_{ip})\right) d F(\nu)$$
+
+We obtain the cross-price elasticity of product $j$ with respect to a change in price of product $\ell$, $\epsilon_{\ell j m} = \frac{p_{\ell m}}{s_{jm}} \frac{d s_{jm}}{d p_{\ell m}}$, similarly by taking the derivative of the share equation $s_{jm}$ (Equation \ref{p0_share}) with respect to $p_{\ell m}$. Doing so, we obtain: 
+\begin{equation}\label{p1_elas_cross_price}
+   \epsilon_{\ell j m} = -\frac{p_{\ell m}}{s_{jm}}\int  \frac{\exp(V_{ijm})}{\left(1 + \sum_k \exp(V_{ikm}) \right)^2} \exp(V_{i\ell m})\sigma_\alpha\nu_{ip} dF(\nu).
+\end{equation}
+
+We could calculate the elasticities as follows:
+% SHOULD THIS BE PSUEDO CODE? 
+\begin{verbatim}
+def calc_elas(self):
+    delta = (
+        np.tensordot(self.beta_est, self.data.X, axes=1)
+        - self.alpha_est * self.data.p
+        + self.xi_est
+    )
+
+    nu_vec = np.random.lognormal(
+        mean=self.params["nu"]["mu"],
+        sigma=self.params["nu"]["sigma"],
+        size=(
+            self.params["nu"]["n_draws"],
+            self.params["M"],
+        ),
+    )
+
+    dsj_dpj = np.mean(
+        self.data._integrand_derivative_simulation(delta, self.data.p, nu_vec),
+        axis=0,
+    )
+
+    dsj_dpi = np.mean(
+        self.data._integrand_cross_derivative_simulation(
+            delta, self.data.p, nu_vec
+        ),
+        axis=0,
+    )
+
+    own_price_elas = dsj_dpj * self.data.p / self.data.s
+    cross_price_elas = dsj_dpi * get_competitor_prices(self.data.p) / self.data.s
+\end{verbatim}
+
+\end{answer}
+
+\item Consumer Surplus 
+\begin{answer}
+
+
+The consumer surplus of consumer $i$ is the maximum price they would have been willing to pay for the good they receive. Our object of interest is expected consumer surplus over consumers.
+
+Recall that BLP demand is microfounded by a consumer with indirect utility that is linear in wealth. This implies no income effects, so we can simply divide the utility of the good chosen by $i$ in market $m(i)$ by the price coefficient for agent $i$ to get 
+
+$$CS(i)=\frac{\max_{j}X_{jm(i)}\beta - (\alpha + \sigma_\alpha \nu_{ip})p_{jm(i)} + \xi_{jm(i)} + \epsilon_{ijm(i)}}{\alpha + \sigma_{\alpha} \nu _{ip}}$$
+
+$$CS(i|\nu)=\frac{ \max_jV_{ijm(i)\nu}+ \epsilon_{ijm(i)}}{\alpha + \sigma_{\alpha} \nu}$$
+
+The expectation over the  idiosyncratic taste shocks $\epsilon_{ijm(i)}$, we get 
+
+$$E[CS(i|\nu)]=\frac{E[\max_jV_{ijm(i)\nu}+ \epsilon_{ijm(i)}|\nu ]}{\alpha + \sigma_{\alpha} \nu}$$
+
+$$E[CS(i|\nu)]=\frac{E[\max_jV_{ijm(i)\nu}+ \epsilon_{ijm(i)} ]}{\alpha + \sigma_{\alpha} \nu}$$
+
+To derive a closed form for the above, 
+Consider the random variable 
+$$Z_{im(i)v} = \max_jV_{ijm(i)\nu}+ \epsilon_{ijm(i)}$$
+the CDF of $Z$ $F(Z\leq z)$ is 
+
+\begin{align*}
+    Pr(\max_jV_{ijm(i)\nu}+ \epsilon_{ijm(i)} \leq z) &= Pr(V_{ijm(i)\nu}+ \epsilon_{ijm(i)} \leq z, \forall j \in m(i))\\
+    &=Pr(V_{ijm(i)\nu}+ \epsilon_{ijm(i)} \leq z, \forall j )\\
+    &=\prod _{j}Pr(V_{ijm(i)\nu}+ \epsilon_{ijm(i)} \leq z)\\
+    &=\prod _{j}Pr(\epsilon_{ijm(i)} \leq z - V_{ijm(i)\nu})\\
+    &=\prod _{j} \exp(-\exp(V_{ijm(i)\nu}-z)) \\
+    &=\prod _{j} \exp(-\exp(V_{ijm(i)\nu})\exp(-z)))\\
+    &= \exp(-\exp(-z)\sum_j\exp(V_{ijm(i)\nu}-z))\\
+    &= \exp(-\exp(  \log \left( \sum_j\exp(V_{ijm(i)\nu} \right)-z))
+\end{align*}
+
+using that the $\epsilon$ terms are i.i.d. type 1 EEV. 
+
+This is the CDF of a type 1 EEV  distribution with a location shift of $\log \left( \sum_j\exp(V_{ijm(i)\nu} \right)$, so it has mean $\log \left( \sum_j\exp(V_{ijm(i)\nu} \right) + \gamma$ where $\gamma$ is the Euler-Mascheroni constant, the mean of the standard type 1 EEV distribution. 
+
+Therefore, conditional on a given $\nu$ draw and a market $m$, the expectated (across $\epsilon$ draws) consumer surplus is 
+$$E[CS|\nu,m)]=\frac{\gamma + \sum_j \log \left( \sum_j \exp \left(X_{jm}\beta - (\alpha + \sigma_\alpha \nu)p_{jm} + \xi_{jm}\right)\right)}{{\alpha + \sigma_{\alpha} \nu}}$$
+
+Averaging across markets and integrating out over the distribution of $\nu$, we get a final expression for expected consumer surplus 
+
+$$E[CS]=\int_0^\infty \frac{\gamma + \frac{1}{M}\sum_m  \log \left( \sum_j \exp \left(X_{jm}\beta - (\alpha + \sigma_\alpha \nu)p_{jm} + \xi_{jm}\right)\right)}{{\alpha + \sigma_{\alpha} \nu}}dF(\nu)$$ where $F(\nu)$ is a standard lognormal
+
+The following pseudocode shows how we can estimate this expression using our parameters from the BLP GMM routine and Monte Carlo/numerical integration
+
+\begin{verbatim}
+
+# helper function for summation
+def _inside_summation(data, all params from GMM, nus, xi_hats): 
+    summands = np.exp(data[X]@ beta from GMM - 
+    (alpha from GMM + sigma alpha from GMM * nu)@data[p]  + xi_hats)
+    return summands
+def  _get_consumer_surplus(data, all params from GMM, nu draws):
+    xi_hats = get_xi(all params from GMM)
+    # form term inside summation 
+    summands_jm = np.log(_inside_summation(data, all params from GMM, nu draws, xi_hats))
+    # note we would want to pass the same nu draws we use for original BLP run
+    summands_m = np.sum(summands_jm, axis = 0) 
+    # taking the sum within markets and nu draws but across products
+    mean_summand = np.mean(summands_m, axis = 1) 
+    # now taking the mean across markets 
+    integrand = (np.euler_gamma + mean_summand)/
+    (alpha from GMM + sigma alpha from GMM @ nu_draws)
+    expected_CS = np.mean(integrand) 
+    #taking the empirical average over the nu draws  
+    # i.e. Monte Carlo estimation of the integral
+    return expected_CS
+ \end{verbatim}
+
+\end{answer}
+
+\end{enumerate}
+\item  Misspecification Exercise
+Suppose you estimated $\theta $ under the incorrect assumption
+that $E[\xi |p] = 0$ holds in each market. How would you expect the parameter estimates to
+diﬀer from the true values and from those obtained using the valid instruments?
+
+\begin{answer}
+
+Making such an assumption essentially corresponds to running OLS rather than IV In the inner loop. Since $p,\xi$ are positively correlated (firms set higher prices when they know they have good characteristics), we would expect the coefficient  on $\alpha$ to be biased up for any $\textit{given}$ choice of $\sigma_\alpha$. Since the $X$ variables are uncorrelated with $\xi$, the OVB formula implies that the OLS $\beta$ estimates are still consistent. 
+
+
+However, our overall GMM procedure will also optimize for $\sigma_\alpha$ given theese inner loop estimates. Heuristically, we might expect it to underestimate the $\sigma_{\alpha}$ coefficient given that the $\alpha$ coefficient is biased up, so that consumers will be estimated to be more price elastic than they are, leaving less room for residual variance in the price elasticity to rationalize the data. 
+
+
+
+
+\end{answer}
+
+
+\end{enumerate}
+
+\section*{Problem 2: Adding the Supply-Side}
+
+\begin{enumerate}
+\item \textbf{Marginal cost estimation:} Given your estimated $\theta$, compute the markups and hence the marginal costs.
+
+\begin{enumerate}
+    \item Write down the expressions for marginal costs under each of the following pricing assumptions:
+    \begin{enumerate}
+        \item Perfect Competition
+
+        \begin{answer}
+            Because firms are engaged in perfect competition, they must set price equal to marginal cost. Thus, we expect to have 
+            \begin{equation}\label{p2_mc_pcomp}
+            MC_{jm} = p_{jm}.
+            \end{equation}
+            Note this corresponds to an infinite elasticity. 
+        \end{answer}
+
+        \item Perfect Collusion
+
+        \begin{answer}
+            If firms are engaged in perfect collusion, we can conceptualize this as if one firm were jointly maximizing all prices. We assume that the markets are all independent and thus only products within market have cross-price elasticities. Thus, the firm optimization problem for market $m$ is
+            \[
+            \max_{p_{jm}} \sum_{j} (p_{jm} - MC_{jm})s_{jm}.
+            \]
+            Then the FOC for a given $p_{jm}$ is given as 
+            \[
+                \sum_{k} (p_{km} - MC_{km}) \frac{d s_{km}}{d p_{jm}} + s_{jm} = 0.
+            \]
+            Let $\Delta$ be the $JM \times JM$ matrix where entry $\Delta_{jm,km} = - \frac{d s_{km}}{d p_{jm}}$ . Thus, we can represent the share equation in vector notation as $\bm{s} = \Delta (\bm{p} - \bm{MC})$, which upon rearranging implies \[
+                \bm{MC} = \bm{p} - \Delta^{-1}\bm{s}.
+            \]
+            Thus, returning to our original notation, we obtain that 
+            \begin{equation}\label{p2_mc_pcol}
+                MC_{jm} = p_{jm} - [\Delta^{-1}\bm{s}]_{jm},
+            \end{equation}
+            where $[\Delta^{-1}\bm{s}]_{jm}$ captures the dot product of share-price derivatives (after being inverted) with the shares for a given product $j$ in market $m$.
+        \end{answer}
+
+
+        \item Oligopoly
+
+        \begin{answer} If firms behaved oligopolistically, they set prices according to the rule 
+        \[
+        \frac{p_{jm} - MC_{jm}}{p_{jm}} = - \frac{1}{\frac{d \ln s_{jm}}{d \ln p_{jm}}}.
+        \]
+        Rearringing to obtain an expression for marginal cost, we get
+        \begin{equation}\label{p2_mc_oli}
+            MC_{jm} = p_{jm} + \frac{p_{jm}}{\frac{d \ln s_{jm}}{d \ln p_{jm}}} = p_{jm} + \frac{s_{jm}}{\frac{d s_{jm}}{d p_{jm}} }.
+        \end{equation}
+        \end{answer}
+
+        \item Provide pseudocode for estimating marginal costs under each pricing assumption.
+
+        \begin{answer}
+        First, for perfect competition, we simply set marginal cost equal to the prices we observed, i.e.,
+        \begin{verbatim}
+            def _estimate_mc_perf_comp():
+                return self.prices
+        \end{verbatim}
+
+        For perfect collusion, we need to use the expression for the derivative of shares with respect to price that we have used above (to calculate elasticities). Pseudocode is as follows:
+        \begin{verbatim}
+            def _estimate_mc_collusion():
+                share_price_derivative = calculate_s_p_derivative(...)
+                markups = inverse(share_price_derivative) dot shares
+                return prices - markups
+        \end{verbatim}
+        where the dot corresponds to matrix multiplication. 
+
+        Finally, for oligopolistic competition, we just require the own-price elasticity, i.e., 
+        \begin{verbatim}
+            def _estimate_mc_oligopoly():
+                elasticity = get_elasticities(...)
+                own_price = diagonal of elasticity
+                return p + p / own_price
+        \end{verbatim}
+        \end{answer}
+        \item Given that the true model is oligopolistic, discuss how the marginal cost estimates under the assumptions of perfect competition and perfect collusion are expected to compare with the true marginal costs.
+
+        \begin{answer}
+
+            The assumption of perfect competition, would overestimate marginal costs. It assumes that firms are not charging a markup, but they are. Thus, our estimate of marginal cost would be too high relative to the true marginal cost.
+
+            The assumption of perfect collusion would likely underestimate marginal costs. Note to compare the two it helps to rewrite the expression for marginal cost for the oligopolistic case as 
+            \[
+            MC_{jm} = p_{jm} + \frac{s_{jm}}{\frac{d s_{jm}}{d p_{jm}} } = p_{jm} + \frac{s_{jm}}{\Delta_{jm, jm}}.
+            \]
+            Then observe that if all of the cross-price elasticities were zero, the equation for marginal cost under the perfect collusion case would be exactly identical to this. However, if there were any nonzero cross-price elasticities, the estimated marginal cost under perfect collusion would be lower and thus we would underestimate marginal cost relative to the true marginal cost. We would expect that this is the case, given that under a discrete choice model such as this, goods must be substitutes. The colluding firm acts as a multiproduct monopolist, and a multiproduct monopolist selling strict substitutes always sets markups higher than if the products were sold by individual firms. 
+            
+        \end{answer}
+       
+    \end{enumerate}
+\end{enumerate}
+
+\item \textbf{Joint Estimation of Demand and Supply}: Now suppose you wish to estimate
+both $\theta$ and $\gamma$ jointly while imposing the equilibrium conditions on both the demand
+and supply sides. Assume that
+$$E[\xi,\eta|X,W]=0$$
+\begin{enumerate}
+\item Provide pseudocode for an estimation procedure that jointly estimates $\theta$ and $\gamma$ under
+each pricing assumption from Problem 2(1)(a).
+
+\begin{answer}
+The pseudocode for the 2-stage GMM is given below. Important additions are: 
+\begin{itemize}
+    \item We added a function to calculate the marginal cost based on our conduct assumption. 
+    \item We added a function to estimate $\hat{\gamma}$ and $\hat{\eta}$, which runs OLS to estimate marginal cost on $Z$ and $W$. 
+    \item We incorporate the $\eta$ residuals into our calculation of the GMM objective function now.
+\end{itemize}
+See below:
+
+\begin{verbatim}
+def _get_mc(self):
+    # use functions as defined above
+    if self.conduct == "Perfect Competition": 
+        mc = self._estimate_mc_perf_comp()
+    else if self.conduct == "Perfect Collusion":
+        mc = self._estimate_mc_collusion()
+    else if self.conduct == "Oligopoly":
+        mc = self._estimate_mc_oligopoly()
+
+def _estimate_eta(self, sigma_alpha, nu_vec):
+    # Estimate eta by inverting Lerner index formula
+    mc = self._get_mc()
+    reg = OLS of mc on intercept + Z + W
+    gamma = OLS coefficients 
+    eta = OLS residuals
+    return gamma, eta
+
+def _compute_gmm_obj(self, theta, W, nu_vec=None):
+    # Compute GMM objective function
+    _, _, xi = self._estimate_xi(theta[0], nu_vec=nu_vec)
+    _, eta = self._estimate_eta(theta[0], nu_vec=nu_vec)
+    resids = concat(xi, eta)
+
+    # Given our assumptions, all moments are orthogonal to all instruments
+    gmm_objective = (resids @ self.H).T @ W @ (resids @ self.H)
+    return gmm_objective
+
+def run_gmm_2stage(self):
+    # construct instruments (supply and demand side)
+    self.construct_instruments()
+
+    # Stage 1: Weights as identity matrix
+    weights = np.eye(self.num_moments)
+    results = minimize(
+        self._compute_gmm_obj,
+        params_init,
+        args=(
+            weights,
+            nu_vec,
+        ),
+        ...
+    )
+    sigma_alpha = results.x[0]
+
+    # Stage 2: Optimal weights
+    _, _, xi = self._estimate_xi(sigma_alpha, nu_vec=nu_vec)
+    weights = self._get_optimal_weights(xi)
+    results = minimize(
+        self._compute_gmm_obj,
+        [sigma_alpha],
+        args=(
+            weights,
+            nu_vec,
+        ),
+        ...
+    )
+    sigma_alpha = results.x[0]
+
+    # get final parameter estimates 
+    alpha, beta, xi = self._estimate_xi(sigma_alpha, nu_vec=nu_vec)
+    gamma, eta = self._estimate_eta(sigma_alpha, nu_vec=nu_vec)
+    return alpha, beta, sigma_alpha
+\end{verbatim}
+
+\end{answer}
+
+\item Explain how you would use your joint estimates to test the different pricing assumptions.
+
+\begin{answer}
+After estimating $\gamma$, we would be able to calculate marginal costs using the equation,
+$$MC_{jm} = \gamma_0 + \gamma_1W_j + \gamma_2 Z_{jm} + \eta_{jm}$$
+Now, given expressions for prices and marginal costs, we would be able to check which of the three expressions for marginal costs (perfect competition, collusion, oligopoly) fit the data best.
+
+Alternatively, we could run GMM under the three pricing assumptions and see which returns a tighter fit. XX MENTION J STATISTIC
+
+A formal way of testing the validity of our different models would be to look at the J statistic from the GMM routine we use to get our estimates. The J statistic exploits the overidentified nature of GMM to test the validity of the model; in particular, under the null that all moments are mean 0, the GMM objective function should converge to a $\xi^2(m-p)$ distribution, where $p$ is the number of moments and p is the number of parameters. So, comparing the empirical minimum of our GMM objective function to quantiles of the $\xi^2(m-p)$  distribution allows us to test the null hypothesis at varying sizes. We could examine which pricing models, if any, leave us unable to reject that the model is correctly specified. 
+\end{answer}
+
+\end{enumerate}
+
+\end{enumerate}
+
+\section*{Problem 3: Merger Exercise}
+
+\begin{enumerate}
+\item \textbf{Merger Analysis}: Suppose firms 1 and 2 plan to merge.
+\begin{enumerate}
+
+\item Derive the pricing equation for the merged firm.
+
+\begin{answer}
+After merging, the firm maximizes,
+$$\max_{p_{1},p_{2}} (p_{1}-MC_{1})s_{1}(p_{1},p_{2},p_{3}) + (p_{2}-MC_{2})s_{2}(p_{1},p_{2},p_{3})$$
+where we drop the market $m$ subscript for notational simplicity. Taking the FOC,
+$$s_{1}+\frac{ds_{1}}{dp_{1}}(p_{1}-MC_{1}) + \frac{ds_{2}}{dp_{1}}(p_2 - MC_2)=0$$
+$$s_{2}+\frac{ds_{2}}{dp_{2}}(p_{2}-MC_{2}) + \frac{ds_{1}}{dp_{2}}(p_1 - MC_1)=0$$
+Recall $\varepsilon_i = \frac{p_i}{s_i}\frac{d s_i}{d p_i}$ and $\varepsilon_{ij} = \frac{p_j}{s_i}\frac{d s_i}{d p_j}$. Rearranging,
+\begin{align*}
+    \frac{p_1-MC_1}{p_1} &= -\frac{p_2\frac{ds_2}{dp_1}}{p_1\frac{ds_1}{dp_1}}\left( \frac{p_2-MC_2}{p_2}\right) + \frac{1}{\varepsilon_1} \\
+    &= -\frac{p_2\frac{ds_2}{dp_1}}{p_1\frac{ds_1}{dp_1}}\left( -\frac{p_1\frac{ds_1}{dp_2}}{p_2\frac{ds_2}{dp_2}}\left( \frac{p_1-MC_1}{p_1}\right) + \frac{1}{\varepsilon_2} \right) + \frac{1}{\varepsilon_1} \\
+    &= \frac{\varepsilon_{21}}{\varepsilon_1}
+    \frac{\varepsilon_{12}}{\varepsilon_2}
+    \left( \frac{p_1-MC_1}{p_1}\right) - \frac{s_2p_2}{s_1p_1}\frac{\varepsilon_{12}}{\varepsilon_1\varepsilon_2}  + \frac{1}{\varepsilon_1} \\
+    &= \left(- \frac{s_2p_2}{s_1p_1}\frac{\varepsilon_{12}}{\varepsilon_1\varepsilon_2}  +\frac{1}{\varepsilon_1}\right)\left(\frac{\varepsilon_1\varepsilon_2}{\varepsilon_1\varepsilon_2 - \varepsilon_{12}\varepsilon_{21}} \right) \\
+    &= \frac{-\frac{s_2p_2}{s_1p_1}\varepsilon_{12}+\varepsilon_2}{\varepsilon_1\varepsilon_2}\cdot \frac{\varepsilon_1\varepsilon_2}{\varepsilon_1\varepsilon_2 - \varepsilon_{12}\varepsilon_{21}}  \\
+    &= \frac{\varepsilon_2-\frac{s_2p_2}{s_1p_1}\varepsilon_{12}}{\varepsilon_1\varepsilon_2 - \varepsilon_{12}\varepsilon_{21}}.
+\end{align*}
+Thus, the merged firm has pricing equation for product $1$: 
+\begin{equation}
+    \frac{p_1-MC_1}{p_1} = \frac{\varepsilon_2-\frac{s_2p_2}{s_1p_1}\varepsilon_{12}}{\varepsilon_1\varepsilon_2 - \varepsilon_{12}\varepsilon_{21}}
+\end{equation}
+and for product 2, analogously: 
+\begin{equation}
+    \frac{p_2-MC_2}{p_2} = \frac{\varepsilon_1-\frac{s_1p_1}{s_2p_2}\varepsilon_{21}}{\varepsilon_2\varepsilon_1 - \varepsilon_{21}\varepsilon_{12}}.
+\end{equation}
+\end{answer}
+
+\item Explain the interpretation of each term in the merged firm’s pricing equation.
+
+\begin{answer}
+Consider the pricing equation for product 1. The numerator contains the elasticity of product 1 minus the a scaled version of the cross-elasticity (which is scaled by the relative importance of product 2, i.e., market share times price, vs. product 1). The subtracted off part represents the cannibalization effect of product 2. The denominator then contains the product of individual elasticities minus the product of cross-elasticities. A smaller denominator suggests that the products are highly interdependent. 
+
+First observe that when cross price elasticity goes to zero, $\varepsilon\rightarrow 0$, the equation simplifies to the traditional Lerner index. When the cross price elasticity is greater than zero, the firm can optimize to raise markups higher than they were pre-merger, under the condition that,
+$$\varepsilon_{21} >\frac{s_2p_2}{s_1p_1} \varepsilon_1  \implies \frac{p_1}{s_2}\frac{d s_2}{d p_1} > \frac{ds_2/dp_1}{ds_1/dp_2} (\frac{p_1}{s_1} \frac{d s_1}{d p_1}) 
+$$ 
+% $$\frac{ds_2}{dp_1}\frac{p_1}{s_2} > \frac{ds_2/dp_1}{ds_1/dp_2} \frac{ds_1}{dp_1} \frac{p_1}{s_1}$$
+which simplifies to,
+$$\frac{s_1}{s_2} > \frac{ds_1/dp_1}{ds_1/dp_2}.$$
+% \begin{align*}
+%     \frac{s_1}{s_2} &> \frac{ds_1/dp_1}{ds_1/dp_2} \\
+%     &> \frac{ \int \frac{1 + \sum_{k \neq j} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})}{\left(1 + \sum_{k} \exp(\delta_{km} - \sigma_\alpha \nu_{ip} p_{km})\right)^2} \left(\exp(\delta_{jm} - \sigma_\alpha \nu_{ip} p_{jm}) (\alpha + \sigma_\alpha \nu_{ip})\right) d F(\nu)}{\int  \frac{\exp(\delta_{jm}-\sigma_\alpha\nu_{ip}p_{jm})}{\left(1 + \sum_{k=1}^3\exp(\delta_{km} - \sigma_\alpha\nu_{ip}p_{km} \right)^2} \exp(\delta_{j'm}-\sigma_\alpha\nu_{ip}p_{j'm})\sigma_\alpha\nu_{ip} dF(\nu)}
+% \end{align*}
+\end{answer}
+
+\item Provide pseudocode for a function that calculates counterfactual prices following the
+merger, using your estimated parameters.
+
+\begin{answer}
+The pseudocode is very similar to our simulation code to get price and share data, but this time we use the updated Lerner index to back out prices.
+\begin{verbatim}
+def calc_shares(p, params):
+    # Simulate nu to get estimated s1, s2
+
+def calc_elasticities(p, params):
+    # Simulate nu to get estimated ds1/dp1, ds2/dp2, ds1/dp2 
+
+def calc_p(s1,s2,ds1_dp1, ds2_dp2, ds1_dp2):
+    # Get p1, p2 to satisfy the Lerner index, using a non-linear estimator.
+
+def get_fixed_point(params):
+    p = init_p 
+    while err > tol:
+        s1, s2 = calc_shares(p,params)
+        ds1_dp1, ds2_dp2, ds1_dp2 = calc_elasticities(p,params)
+        new_p = calc_p(s1, s2, ds1_dp1, ds2_dp2, ds1_dp2)
+get_fixed_point(params)
+\end{verbatim}
+\end{answer}
+
+\item Based on your demand estimates, discuss qualitatively how you expect the merger
+to affect markups.
+\begin{answer}
+As we saw earlier, the cross-price elasticity can be computed analytically so we can test the condition that,
+$$\varepsilon_{21} > \frac{ds_2/dp_1}{ds_1/dp_2}\varepsilon_1$$
+Intuitively, in a market with only three products with high substitutability across products, we would expect the cross-price elasticity to be high because consumers have few options. Therefore, we would expect markups on both products to increase following the merger. 
+\end{answer}
+
+\end{enumerate}
+\end{enumerate}
 
 \end{document}

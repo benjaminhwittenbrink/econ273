@@ -1,0 +1,148 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{mathptmx}
+\usepackage[parfill]{parskip}
+
+\input{macros}
+
+\title{14.273 IO Problem Set 2}
+\author{Benjamin Wittenbrink, Jack Kelly, and Veronicá Bäcker-Peral}
+
+\begin{document}
+
+\maketitle
+
+\section{Production Function Estimation}
+
+This problem uses data from the NBER Working Paper Grilliches and Mairesse (1995) (henceforth, GM), and builds on previous problem sets by Aviv Nevo, Allan Collard-
+Wexler, and Jan DeLoecker. The dataset (\texttt{gmData.csv}) contains nine variables: 
+\begin{itemize}
+\item \texttt{index}: Firm ID
+\item \texttt{sic3}: 3-digit SIC code
+\item \texttt{yr}: Year
+\item \texttt{ldsal}: Log deflated sales
+\item \texttt{lemp}: Log employment
+\item \texttt{ldnpt}: Log deflated capital 
+\item \texttt{ldrst}: Log deflated R\&D capital
+\item \texttt{ldrnd}: Log deflated R\&D
+\item \texttt{ldinv}: Log deflated investment
+\end{itemize}
+For additional details on the data, see Hall (1990). 
+
+We are interested in estimating the following production function:
+\begin{equation}\label{p1_prod_fn}
+ldsal_{it} = \beta_1lemp_{it} + \beta_2ldnpt_{it} + \beta_3ldrst_{it} + d_t + d_{t, sic357} + \omega_{it} + \varepsilon_{it},
+\end{equation}
+where $d_t$ denotes year fixed effects and $ d_{t, sic357}$ denotes year fixed effects for industry 357. 
+
+Answer the following questions:
+
+\begin{enumerate}
+\item \textbf{Reproducing GM Results:}
+
+\begin{enumerate}
+
+\item Reproduce Columns 1–4 of Table 3 in GM by estimating diﬀerent versions of
+Equation (\ref{p1_prod_fn}).
+
+
+\item Compare the estimates in Column 3 and Column 1. What insights do you
+draw from the differences?
+
+
+
+
+\item Compare these results with Column 1 of Table VI in Olley and Pakes (1996).
+What do you learn from the comparison?
+
+\end{enumerate}
+
+\item \textbf{Dynamic Panel Model:}
+Following the dynamic panel model in Ackberg, Caves, and Frazer (2015) (henceforth, ACF) in Section 4.3.3:
+
+\begin{enumerate}
+\item Derive the $\rho$–dfferenced version of Equation (\ref{p1_prod_fn}).
+
+
+
+\item State the analog of ACF’s assumptions in this context. 
+
+
+
+\item Write the corresponding version of ACF’s Equation (34).
+
+
+
+
+
+\item List the set of valid instruments based on your stated assumptions.
+
+
+
+
+\item Estimate the dynamic panel model using GMM and compare the results with
+those from Equation (\ref{p1_prod_fn}).
+
+
+\end{enumerate}
+
+
+\item \textbf{ACF: First Stage Moments:}
+
+\begin{enumerate}
+\item Write down the first-stage ACF moment condition.
+
+
+
+\item Estimate the first-stage ACF regression using \texttt{ldinv} as the measure of investment.
+
+
+
+\end{enumerate}
+
+\item \textbf{ACF: Second Stage Moments:}
+
+\begin{enumerate}
+\item Write down the second-stage ACF moment condition.
+
+
+
+\item Estimate the second-stage ACF model to recover $\beta_1, \beta_2,$ and $\beta_3$ under the assumption $\omega_{it} = \rho \omega_{i t-1} + \mu + \xi_{it}.$
+
+
+\item Compare these results with those from both Equation (\ref{p1_prod_fn}) and your previous
+estimation.
+
+
+\item Contrast your findings with Column 5 of GM.
+
+\end{enumerate}
+
+
+\item \textbf{ACF Moments with Survival Control:}
+Redo the second-stage ACF moments incorporating a survival control in the evolution of $\omega$ (i.e,. where survival depends on capital and year). Compare your new estimates with those obtained in part (4) and with Column 6 of GM.
+
+
+
+\item \textbf{Mark-Up Calculation:}
+Calculate mark-ups using labor as a variable input (consult De Loecker and Warzynski (2012) for reference). Note that \texttt{lemp} represents the logarithm of the quantity
+of employed workers (in thousands). To do this:
+\begin{enumerate}
+\item Merge the industry-level wage data from \texttt{sic5811.csv}.
+
+
+\item Plot both the share-weighted and unweighted time series of mark-ups. 
+
+
+\item Comment on your findings. 
+\end{enumerate}
+
+
+\end{enumerate}
+
+
+
+
+\end{document}

@@ -1,0 +1,166 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage[parfill]{parskip}
+\usepackage{mathptmx}
+\usepackage{geometry}
+
+
+\input{macros}
+
+\title{14.273 IO Mini-Project}
+\author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}
+
+\begin{document}
+
+\maketitle
+
+\section{Motivation}
+
+Over the past decades, the wage gap between high school and college graduates has significantly widened, accompanied by a pronounced geographic sorting of workers by skill. Metropolitan areas with a high concentration of college-educated residents have further increased their share of such workers between 1980 and 2000. This phenomenon, often referred to as ``the Great Divergence," has seen high-skill cities experience both robust wage growth and soaring housing costs. Such trends raise important questions about whether higher wages for college graduates have translated into improved economic well-being, given the offsetting effects of elevated local prices. While higher housing (and lifestyle) costs may diminish consumption benefits, the attractive amenities in these cities could potentially enhance overall worker welfare. In this paper, we develop a structural spatial equilibrium model to examine the determinants of this geographic sorting of workers by skill and the corresponding welfare implications. 
+
+
+
+\section{Model}
+
+\subsection{Labor Demand}
+Firms, $d$, in city $j$ at time $t$ produce a homogenous tradeable good using high skill labor, $H_{djt}$, low skill labor, $L_{djt}$, and capital, $K_{djt}$ with the Cobb Douglas production function,
+\begin{equation}\label{eq: production function}
+    Y_{djt} = N_{djt}^\alpha K_{djt}^{1-\alpha}
+\end{equation}
+where $N_{djt}=(\theta_{jt}^L L_{djt}^\rho + \theta_{jt}^H H_{djt}^\rho)^{1/\rho}$ and $\theta_{jt}^X = f_X(H_{jt},L_{jt})\exp(\varepsilon_{jt}^L)$ for $X\in\{H,L\}$. We assume the labor market is perfectly competitive, so wages are equal to the marginal product of labor and capital is supplied elastically at price $\kappa_t$. Then, firms' demand for labor and capital is,
+$$W_{jt}^X = \alpha N_{djt}^{\alpha-\rho} K_{djt}^{1-\alpha} H_{djt}^{\rho-1}f_X(H_{jt},L_{jt})\exp(\varepsilon_{jt}^X)$$
+$$\kappa_t = N_{djt}^\alpha K_{djt}^{-\alpha}(1-\alpha)$$
+Substituting in the equilibrium level of capital,
+\begin{equation}
+    w_{jt}^X = c_t + (1-\rho)\log N_{jt} + (\rho-1)\log X_{jt} + \log f_X(H_{jt},L_{jt}) + \varepsilon_{jt}^X
+\end{equation}
+where $c_t = \frac{1-\alpha}{\alpha} \log \frac{\alpha(1-\alpha)}{\kappa_t}$. Observe that we write these expressions at the city level because the production function is CRS. 
+% The city level aggregate labor is,
+% $$N_{jt} = \left(\exp(\varepsilon_{jt}^L)f_L(\cdot)L_{jt}^\rho + \exp(\varepsilon_{jt}^H)f_H(\cdot)H_{jt}^\rho \right)^{1/\rho}$$ %% This is same as before but city level
+Therefore, labor supply impacts wages through two channels:
+\begin{enumerate}
+    \item Imperfect labor substitution within firms
+    \item City-wide productivity changes
+\end{enumerate}
+We assume that $f_X$ is such that we approximately get,
+$$w_{jt}^H = \gamma_{HH}\log H_{jt} + \gamma_{HL} \log L_{jt} + \varepsilon_{jt}^H$$
+$$w_{jt}^L = \gamma_{LL}\log L_{jt} + \gamma_{LH} \log H_{jt} + \varepsilon_{jt}^L$$ %% Think more about what this means and what it implies about f -- can we solve out for a single closed form f that this implies?
+
+Parameters to be estimated here are the reduced-form aggregate labor demand elasticities $\bm{\gamma} = (\gamma_{HH}, \gamma_{HL}, \gamma_{LH}, \gamma_{LL})$. 
+
+\subsection{Labor Supply to Cities}
+Let,
+\begin{itemize}
+    \item $\ell$: local good;
+    \item $n$: national good;
+    \item $p^\ell$: local good price;
+    \item $p^n$: national good price;
+    \item $A$: vector of city amenities.
+\end{itemize}
+Workers solve
+$$\max_{\ell,n} \zeta \log \ell + (1-\zeta)\log n + \tilde{s}_i(A_{jt}) $$
+subject to $p^n_t n + p^\ell_{jt}\ell\leq W_{jt}$. The FOC are,
+$$\frac{W_{jt}\zeta}{p^\ell_{jt}} = \ell$$
+$$\frac{W_{jt}(1-\zeta)}{p^n_t} = n$$
+Substituting,
+\begin{align*}
+    V_{ijt} &= \log n - \zeta \log \frac{n}{\ell} + \tilde{s}_i(A_{jt})\\ 
+    &= \log \frac{W_{jt}}{p^n_{t}} - \zeta \log\frac{p^n_{t}}{p^\ell_{jt}} + \log\frac{(\zeta)^\zeta}{(1-\zeta)^{1-\zeta}} + \tilde{s}_i(A_{jt}) \\
+    &\equiv w_{jt} - \zeta p_{jt} + s_i(A_{jt})
+\end{align*}
+where $p_{jt} \equiv p_t^n/p_{jt}^\ell$.
+Then, worker demand for local goods is,
+$$HD_{ijt} = \zeta \frac{W_{jt}}{p^\ell_{jt}}$$
+There is heterogeneity in worker preferences for amenities. Specifically,
+$$s_i(A_{jt}) = a_{jt}\beta_i^a + x_{jt}^A\pmb{\beta}_i^x + \pmb{\beta}_i^{st}\mbf{x}_{j}^{st} + \pmb{\beta}_i^{div}\mbf{x}_j^{div} + \sigma_i\varepsilon_{ijt}$$
+where:
+\begin{itemize}
+    \item $\beta_i^x = \beta^x z_i$ is value of exogenous amenities
+    \item $\beta_i^{a} = \beta^{a} z_i$ is value of endogenous amenities
+    \item $\beta_i^{st} = \beta^{st} z_i$ is value of living in state of birth
+    \item $\beta_i^{div} = \beta^{div} z_i$ is value of living in the same census division
+    \item $\sigma_i = \beta^\sigma z_i$
+    \item $z_i$ is a 3x1 vector of dummy variables for worker demographic characteristics (white, black, immigrant)
+    \item $\varepsilon_{ijt}\sim\text{Type I Extreme Value}$
+\end{itemize}
+We renormalize the utility function by dividing each workers' utility by $\beta^\sigma z_i$. Then, with this renormalization,
+$$V_{ijt} = (w_{jt}-\zeta p_{jt})\beta^w z_i + a_{jt}\beta_i^a + x_{jt}^A\beta_i^x + \beta_i^{st}x_{j}^{st} + \beta_i^{div}x_j^{div} + \varepsilon_{ijt}$$ %% WHERE DOES beta^w come from? Inverse of beta^sigma? :|
+Define $\delta_{jt}^z$ as the utility value of the components of the city $j$ which all workers of type $z$ value identically,
+$$\delta_{jt}^z = (w_{jt} - \zeta p_{jt})\beta^w z + a_{jt}\pmb{\beta}^a \mathbf{z} + x_{jt}^A\pmb{\beta}^x\mbf{z}$$
+Then,
+$$V_{ijt} = \delta_{jt}^z + \mbf{x}_j^{st}\mbf{st}_i\pmb{\beta}^{st}\mbf{z}_i+ \mbf{x}_j^{div}\mbf{div}_i\pmb{\beta}^{div}\mbf{z}_i + \varepsilon_{ijt}$$
+Given the distribution of $\varepsilon$, the expected population of high skill workers in each city is,
+$$H_{jt} = \sum_{i\in\mc{H}_t} \frac{\exp(\delta_{jt}^z + \mbf{x}_j^{st}\mbf{st}_i\pmb{\beta}^{st}\mbf{z}_i+ \mbf{x}_j^{div}\mbf{div}_i\pmb{\beta}^{div}\mbf{z}_i)}{\sum_{k} \exp(\delta_{jt}^z + \mbf{x}_j^{st}\mbf{st}_i\pmb{\beta}^{st}\mbf{z}_i+ \mbf{x}_j^{div}\mbf{div}_i\pmb{\beta}^{div}\mbf{z}_i)}$$
+and similarly for low skill workers.
+
+\subsection{Housing Supply}
+Local prices, $p^\ell_{jt}$, which represent local housing costs and the price of a composite good, are set in equilibrium. Inputs into the production of housing include construction materials and land. The housing market is competitive and prices are sold at the marginal cost of production,
+$$P_{jt} = MC(CC_{jt}, LC_{jt})$$
+where $CC_{jt}$ are construction costs and $LC_{jt}$ are land costs. Rents are given by,
+$$R_{jt} = r_t MC(CC_{jt},LC_{jt})$$
+where $r_t$ is the discount rate on housing. We parametrize the log housing supply equation as,
+\begin{equation}
+    \log R_{jt} = \log r_t + \log CC_{jt} + \gamma_j \log HD_{jt}
+\end{equation}
+where
+$$\gamma_j = \gamma + \gamma^{geo}\exp(x_j^{geo}) + \gamma^{reg} \exp(x_j^{reg})$$
+Recall that,
+$$HD_{jt} = L_{jt} \frac{\zeta W_{jt}^L}{R_{jt}} + H_{jt} \frac{\zeta W_{jt}^H}{R_{jt}}$$
+where we set $R_{jt} = p^\ell$, assuming that local costs are equal to rental costs.
+
+\subsection{Amenity Supply}
+The endogenous amenity is chosen by cities and is a function of the employment ratio,
+$$a_{jt} = \gamma^a \log(H_{jt}/L_{jt}) + \varepsilon^a_{jt}$$
+where $\gamma^a$ is the elasticity of amenity supply.
+
+\section{Extension: Complicating the Supply Side}
+
+The model above assumes percent competition on the supply side. We can test for this assumption by considering different possible regime structures.
+
+We can also think about the fact that firms produce houses, but households rent. In this case, 
+$$P_{jt} = \sum_{s=t}^\infty \frac{\E[R_{js}]}{(1+r)^s} \approx \frac{R_{jt}}{r-g}$$
+where $r$ is the discount rate and $g$ is the expected growth rate of rental prices. This is endogenous due to the endogenous supply of amenities.
+
+%% TODO: Think about transition dynamics, 
+
+
+%% We could also do something more complicated where we look at share of land available and the cost of constructing up vs horizontally etc, and create a more realistic marginal cost curve
+
+\section{Extension: A Model of Buyers and Renters}
+
+%% PROBABLY TOO COMPLICATED because we need to think about dynamics which is sad
+
+The model described earlier assumes that homeowners are absentee landlords and that the relationship between rental and sale prices is homogenous and dictated by an exogenous discount rate $r_t$, which is contrary to empirical evidence. We relax this assumption.
+
+We have several hypotheses as to why price-to-rent ratios may vary across cities:
+\begin{enumerate}
+    \item Variation in discount rate. E.g due to taxation. This could also be related to differences in risk across locations. For example, if a location is seen as more risky (e.g. higher probability of natural disaster/devaluation), it's price-to-rent ratio will be lower
+    \item Variation in expected growth rate. This could be related to expected future demand as well as well as the curvature of the supply function. For example, if the city is near peak capacity, any future demand shocks will raise future rents and prices more. This will raise the price-to-rent ratio
+    \item Variation in preference for homeownership. Suppose that there is an annual fixed cost to renting (e.g. probability of being kicked out, disutility of lack of control, etc), whereas there is a fixed cost to owning at transaction time (e.g. time costs of selling). Then, the utility of owning vs renting will vary depending on expected time of residence.
+\end{enumerate}
+Our goal is to incorporate these into the model to the degree that we can. 
+
+First, note that without endogenizing the local housing discount rate, $r_{jt}$, we can still get variation in price to rent ratios by calculating expected increases in rents from endogenous changes in amenities, using the existing model.
+
+In the next section, we will attempt to endogenize this discount rate.
+
+\subsection{Housing Demand}
+Consider a household $i$ that at time $t$ chooses a city $j$ to live in and whether to purchase a home or rent. The household will earn wage $W_{ijt}$ and will pay rent $R_{jt}$ in every period, or it will pay $P_{jt}$ once at $t=t_0$. The household has Cobb-Douglas preferences between a homogenous consumption good, $C$, and local amenities $A_{ijt}$, and also has an idiosyncratic, time-invariant preference for each city, $\varepsilon_{ij}$. 
+
+The utility of renting for $T$ periods is,
+$$U^R_{it_0} = \sum_{t=t_0}^T\max_{j, C_t} \beta^t (1-\zeta) \log C_t + \zeta \log A_{ijt} + \varepsilon_{ij}$$
+such that $C_t + R_{jt} \leq W_{ijt}$ for all $t\geq t_0$. We have normalized the price of the consumption good to 1.
+
+The utility of owning is,
+$$U^P_{it_0}= \sum_{t=t_0}^T\max_{j, C_t} \beta^t (1-\zeta) \log C_t + \zeta \log A_{ijt} + \mu_{ij} + \varepsilon_{ij}$$
+such that $P_{t_0} + \sum_{t=t_0}^T C_t + \tau_j P_t = \sum_{t=t_0}^T \beta^t W_{ijt}$. Observe that we have added a idiosyncratic preference shock $\mu_{ij}$ that represents $i$'s utility of buying vs renting in city $j$. The budget constraint for buyers says that the price of buying at $t_0$ plus total consumption and tax payments, with tax rate $\tau_j$, must be less than the present value of the household's wage. We assume that buyers purchase the house in full for simplicity.
+
+Substituting the budget constraint into the maximization problem, renters will choose
+$$j^*_R = \arg\max_j \sum_{t=t_0}^T \beta^t (1-\zeta) \log (W_{ijt}-R_{jt}) + \zeta \log A_{ijt} + \varepsilon_{ij}$$
+and homeowners will choose
+$$j^*_P = \arg\max_j \sum_{t=t_0}^T \beta^t (1-\zeta) \log \left(W_{ijt}-\frac{P_{t_0} + \sum_{t=t_0}^T \beta^t \tau_j P_t}{\sum_{t=t_0}^T \beta^t}\right) + \zeta \log A_{ijt} + \varepsilon_{ij}$$
+
+
+\end{document}

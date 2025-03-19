@@ -26,9 +26,9 @@ print(table.to_latex())
 
 # %%
 # Part 2
-# part 1
-acf_rho_res = p1.acf_rho_diff(gmd)
+acf = p1.ACF(df=gmd)
+acf_rho_diff_res = acf.est_rho_diff_model()
 
 # %%
-acf_rho_res
+acf_rho_diff_res
 # %%

@@ -1,8 +1,10 @@
 import os
+import re
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from linearmodels.iv import IV2SLS
 import matplotlib.pyplot as plt
 
 from scipy.optimize import minimize
@@ -101,16 +103,17 @@ def acf_rho_diff(df):
                 lemp_lag=lambda x: x["lemp"].shift(1),
                 ldnpt_lag=lambda x: x["ldnpt"].shift(1),
                 ldrst_lag=lambda x: x["ldrst"].shift(1),
+                ldinv_lag=lambda x: x["ldinv"].shift(1),
             ),
         )
         .reset_index(drop=True)
-        .dropna(subset=["ldsal_lag"])
     )
 
     rho_init = 0.5
     result = minimize(
         lambda r: rho_gmm_objetive(df_lag, r),
         x0=rho_init,
+        bounds=[(0, 1)],
         method="L-BFGS-B",
     )
     rho_hat = result.x[0]
@@ -134,11 +137,88 @@ def rho_diff_moments(df, rho):
     # NOTE: @TODO: need to do IV here
     X = df_diff[["lemp_diff", "ldnpt_diff", "ldrst_diff"]]
     y = df_diff["ldsal_diff"]
-    mod = sm.OLS(y, sm.add_constant(X)).fit()
+
     return mod.params, mod.resid
 
 
 def rho_gmm_objetive(df, rho):
-    params, resid = rho_diff_moments(df, rho)
-    moment_val = np.mean(df["lemp_lag"] * resid)
-    return moment_val**2
+    print("Minimizing rho: ", rho)
+    # create year fixed effects
+    df = df.assign(
+        sic_357=lambda x: (x["sic3"] == 357).astype(int),
+        yr_sic357=lambda x: x["yr"].astype(str) + "_" + x["sic_357"].astype(str),
+    )
+    df = pd.get_dummies(df, columns=["yr", "yr_sic357"], drop_first=False)
+    df = df.drop(
+        columns=[col for col in df.columns if re.match(r"^yr_sic357_.*_0$", col)]
+    )
+
+    # calculate rho differences variables
+    df_diff = df.assign(
+        ldsal_diff=lambda x: x["ldsal"] - rho * x["ldsal_lag"],
+        lemp_diff=lambda x: x["lemp"] - rho * x["lemp_lag"],
+        ldnpt_diff=lambda x: x["ldnpt"] - rho * x["ldnpt_lag"],
+        ldrst_diff=lambda x: x["ldrst"] - rho * x["ldrst_lag"],
+    )
+    fe_cols = sorted([col for col in df.columns if col.startswith("yr_")])
+    # For each subsequent year column, subtract rho times the previous column in-place
+    for i in range(1, len(fe_cols)):
+        current_col = fe_cols[i]
+        prev_col = fe_cols[i - 1]
+        df_diff[current_col + "_diff"] = df_diff[current_col] - rho * df_diff[prev_col]
+
+    # df yr, yr_0, yr_1
+    #
+    df_diff = df_diff.query("yr_73 != 1")
+
+    X = (
+        df_diff[
+            [
+                "lemp_diff",
+                "ldnpt_diff",
+                "ldrst_diff",
+            ]
+            + [col for col in fe_cols if "_73" not in col]
+        ]
+        .dropna()
+        .astype(float)
+    )
+    Z = (
+        df_diff.loc[X.index][
+            [
+                "ldinv_lag",
+                "lemp_lag",
+                "ldnpt_lag",
+                "ldrst_lag",
+            ]
+            + [col for col in fe_cols if "_73" not in col]
+        ]
+        .astype(float)
+        .values
+    )
+    y = df_diff.loc[X.index]["ldsal_diff"].values
+    X = X.values
+    W = np.identity(Z.shape[1])
+
+    beta_1 = run_linear_gmm(X, Z, W, y)
+    resid = y - X.dot(beta_1)
+    W = get_optimal_weights(Z, resid)
+    beta_2 = run_linear_gmm(X, Z, W, y)
+    resid_2 = y - X.dot(beta_2)
+
+    resid_2_mat = np.reshape(resid_2, (-1, 1))
+    moment_val = (Z.T.dot(resid_2_mat)).T @ W @ (Z.T.dot(resid_2_mat))
+    return moment_val
+
+
+def run_linear_gmm(X, Z, W, y):
+    # linear gmm = (X' Z W Z' X)^{-1} (X' Z W Z' y)
+    term1 = X.T.dot(Z).dot(W).dot(Z.T).dot(X)
+    term1_inv = np.linalg.pinv(term1)
+    term2 = X.T.dot(Z).dot(W).dot(Z.T).dot(y)
+    return term1_inv.dot(term2)
+
+
+def get_optimal_weights(Z, resid):
+    mat = (Z.T * (resid.flatten() ** 2)) @ Z
+    return np.linalg.pinv(mat / Z.shape[0])

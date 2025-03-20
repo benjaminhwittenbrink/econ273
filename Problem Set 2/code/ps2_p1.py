@@ -241,5 +241,5 @@ class ACF:
 
     def _first_stage_fit_phi_poly(self, degree=2):
         poly = PolynomialFeatures(degree=degree)
-        phi = poly.fit_transform(self.df[["lemp", "ldnpt", "ldrst"]])
+        phi = poly.fit_transform(self.df[["lemp", "ldnpt", "ldrst", "ldinv"]])
         return phi

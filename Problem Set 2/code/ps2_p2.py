@@ -45,19 +45,17 @@ def process_data(dir="../data/"):
     return entry
 
 
-entry = process_data()
-
-
 def make_shock_matrix(data, N_draws=params["N_draws"]):
     shocks = np.random.normal(0, 1, size=(len(data), N_draws))
     return shocks
 
 
+entry = process_data()
 shocks = make_shock_matrix(entry)
 
 
 # %%
-def get_simulated_prob_entry(theta, data, shocks):
+def get_simulated_prob_entry(theta, data, shocks, params):
     mu = theta[0]
     sigma = theta[1]
     alpha, beta, delta, N_draws = (
@@ -97,7 +95,7 @@ def get_simulated_prob_entry(theta, data, shocks):
 results = minimize(
     get_simulated_prob_entry,
     [2, 1],
-    args=(entry, shocks),
+    args=(entry, shocks, params),
     # BW NOTE: i think we can change this to like 1e-6
     tol=1e-15,
     method="Nelder-Mead",

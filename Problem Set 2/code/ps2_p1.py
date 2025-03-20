@@ -116,6 +116,7 @@ class ACF:
             .reset_index(drop=True)
         )
 
+    # RHO PANEL DIFFERENCING METHODS
     def est_rho_diff_model(self, rho_init=None):
         # create lagged data
         self._create_lag_df()
@@ -229,10 +230,16 @@ class ACF:
         mat = (Z.T * (resid.flatten() ** 2)) @ Z
         return np.linalg.pinv(mat / Z.shape[0])
 
+    # ACF FIRST STAGE
+    def est_first_stage(self, degree=2):
+        phi = self._first_stage_fit_phi_poly(degree=degree)
+        X = sm.add_constant(phi)
+        y = self.df["ldsal"].values
+        res = sm.OLS(y, X).fit()
+        return res
+        # return res.fittedvalues, res.resid
 
-# ACF First stage
-def acf_first_stage(df, degree=2):
-    poly = PolynomialFeatures(degree=degree)
-    phi = poly.fit_transform(df[["lemp", "ldnpt", "ldinv"]])
-    phi = sm.add_constant(phi)
-    res = sm.OLS(df["ldsal"], phi).fit()
+    def _first_stage_fit_phi_poly(self, degree=2):
+        poly = PolynomialFeatures(degree=degree)
+        phi = poly.fit_transform(self.df[["lemp", "ldnpt", "ldrst"]])
+        return phi

@@ -28,7 +28,7 @@ print(table.to_latex())
 # Part 2
 acf = p1.ACF(df=gmd)
 acf_rho_diff_res = acf.est_rho_diff_model()
-
-# %%
 acf_rho_diff_res
+# %%
+first_stage = acf.est_first_stage(degree=3)
 # %%

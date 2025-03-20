@@ -33,9 +33,9 @@ For additional details on the data, see Hall (1990).
 
 We are interested in estimating the following production function:
 \begin{equation}\label{p1_prod_fn}
-ldsal_{it} = \beta_1lemp_{it} + \beta_2ldnpt_{it} + \beta_3ldrst_{it} + d_t + d_{t, sic357} + \omega_{it} + \varepsilon_{it},
+\log \text{Sale}_{it} = \beta_1 \log \text{Emp}_{it} + \beta_2 \log \text{Capital}_{it} + \beta_3 \log \text{R\&D Capital}_{it} + \delta_t + \gamma_{t, sic357} + \omega_{it} + \varepsilon_{it},
 \end{equation}
-where $d_t$ denotes year fixed effects and $ d_{t, sic357}$ denotes year fixed effects for industry 357. 
+where $\delta_t$ denotes year fixed effects and $ \gamma_{t, sic357}$ denotes year fixed effects for industry 357. 
 
 Answer the following questions:
 
@@ -46,6 +46,36 @@ Answer the following questions:
 
 \item Reproduce Columns 1–4 of Table 3 in GM by estimating diﬀerent versions of
 Equation (\ref{p1_prod_fn}).
+
+\begin{answer}
+
+We reproduced the results in GM in Table \ref{tab:gm_rep}.
+
+\begin{table}[!htb]
+\centering
+\caption{Replication of GM}
+\label{tab:gm_rep}
+\begin{tabular}{lcccc}
+\toprule
+& (1) & (2) & (3) & (4) \\ 
+ & Balanced, Total & Balanced, Within & Full, Total & Full, Total (+ Investment) \\
+\midrule
+Log employment & 0.496 & 0.685 & 0.578 & 0.551 \\
+ & (0.022) & (0.030) & (0.013) & (0.013) \\
+Log capital & 0.460 & 0.180 & 0.372 & 0.298 \\
+ & (0.014) & (0.027) & (0.009) & (0.012) \\
+Log R\&D capital & 0.034 & 0.099 & 0.038 & 0.027 \\
+ & (0.015) & (0.027) & (0.007) & (0.007) \\
+Log investment &  &  &  & 0.110 \\
+ &  &  &  & (0.011) \\
+ \midrule 
+N & 856 & 856 & 2,971 & 2,971 \\
+$R^2$ & 0.968 & 0.994 & 0.962 & 0.963 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{answer}
 
 
 \item Compare the estimates in Column 3 and Column 1. What insights do you
@@ -65,14 +95,62 @@ Following the dynamic panel model in Ackberg, Caves, and Frazer (2015) (hencefor
 \begin{enumerate}
 \item Derive the $\rho$–dfferenced version of Equation (\ref{p1_prod_fn}).
 
+\begin{answer}
+
+We calculate the $\rho$-differenced version as $y_{it} - \rho y_{it}$. Applying this to our setting we obtain 
+\begin{align*}
+    &\log \text{Sale}_{it} - \rho  \log \text{Sale}_{it-1} \\ 
+    &\quad = \beta_1 (\log \text{Emp}_{it} - \rho \log \text{Emp}_{it-1}) + \beta_2 (\log \text{Capital}_{it} - \log \text{Capital}_{it-1}) \\ 
+    &\quad \quad + \beta_3 (\log \text{R\&D Capital}_{it}  - \rho \log \text{R\&D Capital}_{it-1}) 
+    + (\delta_t - \rho \delta_{t-1}) \\ 
+    &\quad\quad + (\gamma_{t, sic357} - \rho \gamma_{t-1, sic357}) + \xi_{it} + (\varepsilon_{it}-\rho\varepsilon_{it-1}),
+\end{align*}
+where $\omega_{it} = \rho \omega_{it-1} + \xi_{it}$ under the assumption that $\omega_{it}$ follows an AR(1) process. 
+
+
+\end{answer}
+
 
 
 \item State the analog of ACF’s assumptions in this context. 
 
+\begin{answer}
+
+ACF assume for their context that: 
+\begin{enumerate}
+    \item $\varepsilon_{it}$ is iid over time and uncorrected with $I_{it}$; 
+    \item $\omega_{it}$ is correlated with $k_{it}$ and $l_{it}$ $\forall t$; 
+    \item $\xi_{it}$ is uncorrelated with $I_{it-1}$ (i.e., all input choices before $t$). 
+\end{enumerate}
+
+%Similarly, in this context, we also assume that $\varepsilon_{it}$ is iid over time and uncorrelated with the information set $I_{it}$.
+Our assumptions in this context are similar. ...  We also impose that $\xi_{it}$ is uncorrelated with all input choices before $t$ (i.e., employment, capital, and R \& D capital).
+
+\end{answer}
 
 
 \item Write the corresponding version of ACF’s Equation (34).
 
+
+\begin{answer}
+
+In ACF, they estimate the model using the moment condition: 
+\[
+E[\xi_{it} + (\varepsilon_{it} - \rho \varepsilon_{it-1}) \mid I_{it-1}] =0.
+\]
+In our context, this is given as 
+\begin{align*}
+& E[\xi_{it} + (\varepsilon_{it} - \rho \varepsilon_{it-1}) \mid I_{it-1}] \\
+&= 
+E[(\log \text{Sale}_{it} - \rho  \log \text{Sale}_{it-1}) - \beta_1 (\log \text{Emp}_{it} - \rho \log \text{Emp}_{it-1}) \\
+&\quad \quad - \beta_2 (\log \text{Capital}_{it} - \rho \log \text{Capital}_{it-1}) - \beta_3 (\log \text{R\&D Capital}_{it}  - \rho \log \text{R\&D Capital}_{it-1}) \\
+&\quad \quad - (\delta_t - \rho \delta_{t-1})-(\gamma_{t, sic357} - \rho \gamma_{t-1, sic357})
+\mid I_{it-1}] \\
+&= 0.
+\end{align*}
+
+
+\end{answer}
 
 
 
@@ -80,6 +158,11 @@ Following the dynamic panel model in Ackberg, Caves, and Frazer (2015) (hencefor
 \item List the set of valid instruments based on your stated assumptions.
 
 
+\begin{answer}
+
+Any variable that was chosen in period $t-1$ is a valid instrument. Thus, period $t$ capital and R \& D capital (assuming dynamic) are valid. Additionally, period $t-1$ employment is valid. 
+
+\end{answer}
 
 
 \item Estimate the dynamic panel model using GMM and compare the results with
@@ -89,12 +172,19 @@ those from Equation (\ref{p1_prod_fn}).
 \end{enumerate}
 
 
-\item \textbf{ACF: First Stage Moments:}
+ \item \textbf{ACF: First Stage Moments:}
 
 \begin{enumerate}
+
 \item Write down the first-stage ACF moment condition.
 
 
+\begin{answer}
+
+$$E[y_{it} - \tilde{\phi}_t(k_{it},l_{it},m_{it})|I_t]=0$$
+
+In words, this says that the transitory shock $\epsilon_{it}$ -- which can be written as the production function purged of any dependence on capital, labor, and intermediate inputs -- is ``unexpected": orthogonal to all information available at time $t$.
+\end{answer}
 
 \item Estimate the first-stage ACF regression using \texttt{ldinv} as the measure of investment.
 
@@ -107,10 +197,19 @@ those from Equation (\ref{p1_prod_fn}).
 \begin{enumerate}
 \item Write down the second-stage ACF moment condition.
 
-
-
+\begin{answer}
+$$E[y_{it} - \beta_0 - \beta_k k_{it} - \beta_l l_{it} -g(\tilde{\phi}_{t-1}(k_{it-1},l_{it-1},m_{it-1}) - \beta_0 - \beta_k k_{it-1} - \beta_l l_{it-1}|I_{it-1}]=0$$
+\end{answer}
 \item Estimate the second-stage ACF model to recover $\beta_1, \beta_2,$ and $\beta_3$ under the assumption $\omega_{it} = \rho \omega_{i t-1} + \mu + \xi_{it}.$
 
+ \begin{answer}
+
+ $$E[y_{it} - \beta_0 - \beta_k k_{it} - \beta_l l_{it} -\omega(\tilde{\phi}_{t-1}(k_{it-1},l_{it-1},m_{it-1}) - \beta_0 - \beta_k k_{it-1} - \beta_l l_{it-1}|I_{it-1}]=0$$
+XX justify 
+unconditional version 
+
+ \end{answer}
+g is just $\omega$ now lol and then the instruments are 
 
 \item Compare these results with those from both Equation (\ref{p1_prod_fn}) and your previous
 estimation.
@@ -138,6 +237,96 @@ of employed workers (in thousands). To do this:
 
 \item Comment on your findings. 
 \end{enumerate}
+
+\section{Entry Model}
+
+Consider a two-period model in which firms decide whether to enter in the first period, and only entrants earn profits in the second period.
+
+\subsection{First Period}
+\begin{itemize}
+\item There are $F$ potential entrants.
+\item The fixed cost of entry for firm $f$ into market $m$ is given by:
+\begin{equation}
+\phi_{fm} = Z_{fm} \alpha + u_{fm},
+\end{equation}
+where $u_{fm} \sim N (\mu, \sigma^2)$ and $Z_{fm}$ represents a firm-market characteristic.
+\item Firms observe all variables in the model and enter sequentially. The firm with the lowest realized fixed cost enters first (if profitable), followed by the firm with the second lowest cost, and so on. The payoff from not entering is normalized to zero.
+\end{itemize}
+
+\subsection{Second Period}
+
+Once entry decisions are made, firms realize their net profit (including the fixed cost) given by:
+
+\begin{equation}
+\pi_{fm} = X_m \beta - \delta \log N_m - \phi_{fm},
+\end{equation}
+
+where $N_m$ is the number of firms that entered market $m$ and $X_m$ is a market characteristic. The profit for not entering remains normalized to zero.
+
+\subsection{Parameters}
+
+For this problem, assume the true parameter values are:
+\begin{itemize}
+\item $F = 3$
+\item $(\alpha, \beta, \delta) = (1, 1, 1)$
+\item $(\mu, \sigma^2) = (2, 1)$
+\end{itemize}
+
+The observable characteristics are distributed as follows:
+\begin{itemize}
+\item $X_m \sim N (3, 1)$
+\item $Z_{fm} \sim N (0, 1)$
+\end{itemize}
+
+There are $M = 100$ markets. The dataset \texttt{entryData.csv} contains data for these markets with 7 columns: $X_m$, ${Z_{fm}}{f=1}^{F}$, and the entry decisions of each firm (dummy variables in the same order as $Z{fm}$).
+
+\subsection{Questions}
+
+\begin{enumerate}
+\item \textbf{Berry (ECMA 1992):} Suppose that $(\alpha, \beta, \delta)$ and $F$ are known. Your goal is to estimate $(\mu, \sigma^2)$ using the observable market data. Construct a maximum likelihood estimator and implement a simulated likelihood approach under the correct assumption regarding the order of entry.
+\begin{answer}
+
+We start by solving the game. 
+
+Observe first that while the $u_{fm}$ draws are unknown to the econometrician, they are known to the firms, i.e., this is a game of complete information. 
+
+We can therefore solve it via backwards induction, ordering players by their  $\phi_s$. The last player, the firm with the highest $\phi$ in a given market, $\phi_{f^{\#3}m}$, will enter only if $ \pi_{f^{\#3}m }(N_m=3)\geq0$. If they enter, all previous firms enter, since  their fixed costs are lower. If they do not enter, then the firm with the second highest $\phi$ in a given market, $\phi_{f^{\#2}m}$, will enter only if $ \pi_{f^{\#2}m }(N=2)\geq 0$, and so on and so forth. 
+
+So to simulate the likelihood of the data we observe, we could run the following procedure (XX this is more notes for implementation  than something I think we'll include in final writeup ) 
+
+\begin{enumerate}
+\item For a given $\mu, \sigma^2$, and for each simulation draw, draw cost shocks.
+\item Within each market, order firms by their $\phi_{jm}$
+\item For each firm in a given market who is ranked $r$ in terms of its $\phi_{jm}$ (in ascending order) calculate $\pi_{f^{r}m }(N=r)$
+\item Find the highest $r$ firm (if any) within each market such that $\pi_{f^{r}m }(N=r) \geq 0$, and set the entry variable equal to 1 for that firm and all firms in that market ranked below $r$. 
+\item Run this simulation many times and take the average entry dummy for each observation to get its simulated likelihood (after multiplying by what actually happens)
+\end{enumerate}
+
+$\textit{}$
+
+
+\end{answer}
+\item \textbf{Ciliberto and Tamer (ECMA 2009):}
+\begin{enumerate}
+\item[(a)] Write a function \texttt{calc\_mi(mu; data)} that computes the moment inequality objective value.
+\begin{answer}
+The moment we minimize is 
+
+$$
+\frac{1}{M}\sum_{m\in \mathcal{M}}|\min \{P(y|X_m)-H_1((\mu,\sigma^2),X_m),0\}| + |\max \{P(y|X_m)-H_2((\mu,\sigma^2),X_m),0\}|
+$$
+where 
+\begin{enumerate}
+\item We calculate $P(y|X_m)$ as a multinomial logit 
+\item We calculate $H_1,H_2$ by simulation. In particular, for each simulation draw, for each guess of $\mu,\sigma^2$, we scale up a set of $FM$ draws from a standard normal appropriately (corresponding to one cost shock per firm). 
+\end{enumerate}
+\end{answer}
+\item[(b)] Using the provided pseudocode (\texttt{ctPseudocode.jl}) as guidance, construct and implement the moment inequality estimator.
+\item[(c)] In your write-up, describe how you construct the confidence region, including details on the sub-sampling procedure.
+\end{enumerate}
+\item \textbf{Comparison:} Compare the performance and results of the maximum likelihood estimator from part (1) with the moment inequality estimator from part (2). Comment on any differences.
+\end{enumerate}
+
 
 
 \end{enumerate}

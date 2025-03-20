@@ -1,0 +1,59 @@
+# constants
+F = 3
+M = 100 
+N_draws = 1000
+
+# profit function params
+alpha = 1
+beta = 1
+delta = 1
+mu = 2 
+sigma = 1
+# observable characteristics params
+mu_X = 3
+sigma_X = 1
+
+mu_Z = 0 
+sigma_Z = 1
+
+# product characteristics
+[X.X2]
+# uniform distribution 
+a = 0
+b = 1
+
+[X.X3]
+# normal distribution 
+mu = 0
+sigma = 1
+
+# consumer heterogeneity 
+[nu]
+# log normal distribution 
+mu = 0
+sigma = 1
+n_draws = 3000
+
+# demand shocks 
+[xi]
+# normal distribution
+mu = 0 
+sigma = 1
+
+# cost shifters 
+[cost.W]
+# log normal distribution 
+mu = 0
+sigma = 1
+
+[cost.Z]
+# log normal distribution 
+mu = 0 
+sigma = 1
+
+[cost.eta]
+# log normal distribution 
+mu = 0 
+sigma = 1
+
+

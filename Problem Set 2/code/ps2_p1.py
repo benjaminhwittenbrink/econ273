@@ -122,13 +122,20 @@ class ACF:
         # Create lags
         self._create_lags()
 
-    def _demean_by_fixed_effects(
-        self, cols=["sale", "emp", "capital", "rnd", "invest"]
-    ):
+    def _demean_by_fixed_effects(self, df):
+
+        cols = set()
+        for t in ["sale", "emp", "capital", "rnd", "invest"]:
+            for col in df.columns:
+                if t in col:
+                    cols.add(col)
+        cols = sorted(list(cols))
+
         for col in cols:
-            res = sm.OLS(self.df[col], self.df[self.fe_cols]).fit()
-            self.df[f"{col}_raw"] = self.df[col]
-            self.df[col] = self.df[col] - res.fittedvalues
+            res = sm.OLS(df[col], df[self.fe_cols]).fit()
+            df[f"{col}_raw"] = df[col]
+            df[col] = df[col] - res.fittedvalues
+        return df
 
     def _add_fixed_effects(self):
         self.df = self.df.assign(
@@ -215,8 +222,12 @@ class ACF:
             rnd_diff=lambda x: x["rnd"] - rho * x["rnd_lag"],
         )
 
+        # Get double lag for employment
+        # df["emp_lag2"] = self.df["emp"].groupby(self.df["index"]).shift(2)
+
         # drop rows where missing lag
         df = df.dropna()
+        df = self._demean_by_fixed_effects(df)
         return df
 
     def _rho_diff_create_mat(self, df):
@@ -227,7 +238,7 @@ class ACF:
                     "capital_diff",
                     "rnd_diff",
                 ]
-                + [col for col in self.fe_cols]
+                # + [col for col in self.fe_cols]
             ]
             .dropna()
             .astype(float)
@@ -240,7 +251,7 @@ class ACF:
                     "capital_lag",
                     "rnd_lag",
                 ]
-                + [col for col in self.fe_cols]
+                # + [col for col in self.fe_cols]
             ]
             .astype(float)
             .values
@@ -315,7 +326,9 @@ class ACF:
         df["residuals_lag"] = df["residuals"].groupby(df["index"]).shift(1)
 
         res = sm.OLS(
-            df.residuals, sm.add_constant(df.residuals_lag), missing="drop"
+            df.residuals,
+            sm.add_constant(df[["residuals_lag"]]),
+            missing="drop",
         ).fit()
         rho = res.params["residuals_lag"]
         mu = res.params["const"]
@@ -323,7 +336,7 @@ class ACF:
         return rho, mu, xi
 
     def _second_stage_instruments(self):
-        return self.df[["emp_lag", "capital", "rnd"]].dropna().to_numpy()
+        return self.df.dropna()[["emp_lag", "capital", "rnd"]].to_numpy()
 
     def _second_stage_objective(self, params, W=np.eye(3)):
         # Moment condition
@@ -334,9 +347,10 @@ class ACF:
         mat = (self.Z.T * (xi**2)) @ self.Z
         return np.linalg.pinv(mat / len(xi))
 
-    def est_second_stage(self, num_moments=3):
+    def est_second_stage(self):
         # Construct instruments
         self.Z = self._second_stage_instruments()
+        num_moments = self.Z.shape[1]
 
         # GMM
         # Stage 1
@@ -358,3 +372,172 @@ class ACF:
         rho, mu, xi = self._estimate_rho_mu(res.x)
 
         return [rho, mu] + list(res.x)
+
+    def _second_stage_optimal_weights_alt(self, params):
+        # Moment condition
+        rho, beta_1, beta_2, beta_3 = params
+        df = self.df.dropna()
+
+        xi_epsilon = df["sale"] - (
+            beta_1 * df["emp"]
+            + beta_2 * df["capital"]
+            + beta_3 * df["rnd"]
+            + rho
+            * (
+                df["phi_lag"]
+                - beta_1 * df["emp_lag"]
+                - beta_2 * df["capital_lag"]
+                - beta_3 * df["rnd_lag"]
+            )
+        )
+
+        # Residualize on fixed effects
+        res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
+        xi_epsilon = np.array(res.resid).T
+
+        mat = (self.Z.T * (xi_epsilon**2)) @ self.Z
+        return np.linalg.pinv(mat / len(xi_epsilon))
+
+    def _second_stage_objective_alt(self, params, W=np.eye(3)):
+        # Moment condition
+        rho, beta_1, beta_2, beta_3 = params
+        df = self.df.dropna()
+
+        xi_epsilon = df["sale"] - (
+            beta_1 * df["emp"]
+            + beta_2 * df["capital"]
+            + beta_3 * df["rnd"]
+            + rho
+            * (
+                df["phi_lag"]
+                - beta_1 * df["emp_lag"]
+                - beta_2 * df["capital_lag"]
+                - beta_3 * df["rnd_lag"]
+            )
+        )
+
+        # Residualize on fixed effects
+        res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
+        xi_epsilon = np.array(res.resid).T
+
+        loss = (
+            (self.Z.T.dot(xi_epsilon)).T
+            @ W
+            @ (self.Z.T.dot(xi_epsilon))
+            * 1
+            / len(xi_epsilon)
+        )
+        # print(params)
+        return loss
+
+    def est_second_stage_alt(self):
+        # Construct instruments
+
+        self.df["phi_lag"] = self.df["phi"].groupby(self.df["index"]).shift(1)
+        self.Z = sm.add_constant(
+            self.df.dropna()[
+                ["emp_lag", "capital_lag", "rnd_lag", "invest_lag", "phi_lag"]
+            ]
+        ).to_numpy()
+        # self.Z = self.df.dropna()[
+        #     ["emp_lag", "capital_lag", "rnd_lag", "invest_lag"]
+        # ].to_numpy()
+
+        num_moments = self.Z.shape[1]
+
+        # GMM
+        # Stage 1
+        W = np.eye(num_moments)
+        params_init = [0.5, 0.1, 0.3, 0.5]  # rho + betas
+        res = minimize(
+            self._second_stage_objective_alt,
+            params_init,
+            args=(W,),
+            method="L-BFGS-B",
+            bounds=[(0.00001, None)] * len(params_init),
+        )
+
+        # Calculate optimal weights
+        W = self._second_stage_optimal_weights_alt(res.x)
+
+        # Stage 3
+        res = minimize(
+            self._second_stage_objective_alt,
+            res.x,
+            args=(W,),
+            method="L-BFGS-B",
+            bounds=[(0.00001, None)] * len(params_init),
+        )
+        return res.x
+
+    def _second_stage_objective_survival_control(self, params, W=np.eye(3)):
+        # Moment condition
+        rho, beta_1, beta_2, beta_3, alpha = params
+        df = self.df.dropna()
+
+        xi_epsilon = df["sale"] - (
+            beta_1 * df["emp"]
+            + beta_2 * df["capital"]
+            + beta_3 * df["rnd"]
+            + rho
+            * (
+                df["phi_lag"]
+                - beta_1 * df["emp_lag"]
+                - beta_2 * df["capital_lag"]
+                - beta_3 * df["rnd_lag"]
+            )
+            + alpha * df["capital_lag"]
+        )
+
+        # Residualize on fixed effects
+        res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
+        xi_epsilon = np.array(res.resid).T
+
+        loss = (
+            (self.Z.T.dot(xi_epsilon)).T
+            @ W
+            @ (self.Z.T.dot(xi_epsilon))
+            * 1
+            / len(xi_epsilon)
+        )
+        # print(params)
+        return loss
+
+    def est_second_stage_survival_control(self):
+        # Construct instruments
+
+        self.df["phi_lag"] = self.df["phi"].groupby(self.df["index"]).shift(1)
+        self.Z = sm.add_constant(
+            self.df.dropna()[
+                ["emp_lag", "capital_lag", "rnd_lag", "invest_lag", "phi_lag"]
+            ]
+        ).to_numpy()
+
+        num_moments = self.Z.shape[1]
+
+        # GMM
+        # Stage 1
+        W = np.eye(num_moments)
+        params_init = [0.5, 0.1, 0.3, 0.5, 0]  # rho + betas + alpha + fe
+        res = minimize(
+            self._second_stage_objective_survival_control,
+            params_init,
+            args=(W,),
+            method="L-BFGS-B",
+            bounds=[(0.00001, None)] * len(params_init),
+        )
+        # Get convergence success
+        print(res.success)
+
+        # # Calculate optimal weights
+        # W = self._second_stage_optimal_weights_alt(res.x)
+
+        # # Stage 3
+        # res = minimize(
+        #     self._second_stage_objective_alt,
+        #     res.x,
+        #     args=(W,),
+        #     method="L-BFGS-B",
+        #     bounds=[(0.00001, None)] * len(params_init),
+        # )
+        return res.x

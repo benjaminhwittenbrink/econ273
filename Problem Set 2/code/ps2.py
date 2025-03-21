@@ -16,6 +16,7 @@ reload(p1)
 # %%
 # Part 1
 gmd = p1.load_data()
+# %%
 regs = p1.replicate_GM(gmd)
 
 # %%
@@ -27,8 +28,10 @@ print(table.to_latex())
 # %%
 # Part 2
 acf = p1.ACF(df=gmd)
-acf_rho_diff_res = acf.est_rho_diff_model()
-acf_rho_diff_res
+# acf_rho_diff_res = acf.est_rho_diff_model()
+# acf_rho_diff_res
 # %%
 first_stage = acf.est_first_stage(degree=3)
+results = acf.est_second_stage()
+print(np.round(results, 4))
 # %%

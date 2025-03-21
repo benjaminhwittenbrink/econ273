@@ -117,7 +117,7 @@ class ACF:
         self._add_fixed_effects()
 
         # De-mean variables by fixed effects
-        self._demean_by_fixed_effects()
+        # self._demean_by_fixed_effects()
 
         # Create lags
         self._create_lags()
@@ -164,27 +164,8 @@ class ACF:
         for col in columns:
             self.df[col + "_lag"] = self.df[col].groupby(self.df["index"]).shift(1)
 
-    def _create_lag_df(self):
-        # create t -1 lags in data
-        self.df_lag = (
-            self.df.sort_values(["index", "yr_cat"])
-            .groupby("index")
-            .apply(
-                lambda g: g.assign(
-                    sale_lag=lambda x: x["sale"].shift(1),
-                    emp_lag=lambda x: x["emp"].shift(1),
-                    capital_lag=lambda x: x["capital"].shift(1),
-                    rnd_lag=lambda x: x["rnd"].shift(1),
-                    invest_lag=lambda x: x["invest"].shift(1),
-                ),
-            )
-            .reset_index(drop=True)
-        )
-
     # RHO PANEL DIFFERENCING METHODS
     def est_rho_diff_model(self, rho_init=None):
-        # create lagged data
-        self._create_lag_df()
 
         if rho_init is None:
             rho_init = 0.5
@@ -206,9 +187,9 @@ class ACF:
     def _rho_diff_objective(self, rho, return_params=False):
         print("Minimizing rho: ", rho)
         # create rho differenced data
-        df_diff, fe_cols = self._rho_diff_process_data(rho)
+        df = self._rho_diff_process_data(rho)
         # create matrices for linear GMM
-        X, Z, y = self._rho_diff_create_mat(df_diff, fe_cols)
+        X, Z, y = self._rho_diff_create_mat(df)
         # first stage with W = I
         W = np.identity(Z.shape[1])
         beta_1 = self._rho_diff_linear_gmm(X, Z, W, y)
@@ -226,35 +207,19 @@ class ACF:
 
     def _rho_diff_process_data(self, rho):
         # create year fixed effects
-        dat = self.df_lag.copy()
-        dat = dat.assign(
-            sic_357=lambda x: (x["sic3"] == 357).astype(int),
-            yr_sic357=lambda x: x["yr"].astype(str) + "_" + x["sic_357"].astype(str),
-        )
-        dat = pd.get_dummies(dat, columns=["yr", "yr_sic357"], drop_first=False)
-        dat = dat.drop(
-            columns=[col for col in dat.columns if re.match(r"^yr_sic357_.*_0$", col)]
-        )
-        # calculate rho differences variables
-        df_diff = dat.assign(
+        df = self.df.copy()
+        df = df.assign(
             sale_diff=lambda x: x["sale"] - rho * x["sale_lag"],
             emp_diff=lambda x: x["emp"] - rho * x["emp_lag"],
             capital_diff=lambda x: x["capital"] - rho * x["capital_lag"],
             rnd_diff=lambda x: x["rnd"] - rho * x["rnd_lag"],
         )
-        fe_cols = sorted([col for col in dat.columns if col.startswith("yr_")])
-        # For each subsequent year column, subtract rho times the previous column in-place
-        for i in range(1, len(fe_cols)):
-            current_col = fe_cols[i]
-            prev_col = fe_cols[i - 1]
-            df_diff[current_col + "_diff"] = (
-                df_diff[current_col] - rho * df_diff[prev_col]
-            )
-        # drop rows where yr_73 is 1 (i.e. first year)
-        df_diff = df_diff.query("yr_73 != 1")
-        return df_diff, fe_cols
 
-    def _rho_diff_create_mat(self, df, fe_cols):
+        # drop rows where missing lag
+        df = df.dropna()
+        return df
+
+    def _rho_diff_create_mat(self, df):
         X = (
             df[
                 [
@@ -262,7 +227,7 @@ class ACF:
                     "capital_diff",
                     "rnd_diff",
                 ]
-                + [col for col in fe_cols if "_73" not in col]
+                + [col for col in self.fe_cols]
             ]
             .dropna()
             .astype(float)
@@ -275,7 +240,7 @@ class ACF:
                     "capital_lag",
                     "rnd_lag",
                 ]
-                + [col for col in fe_cols if "_73" not in col]
+                + [col for col in self.fe_cols]
             ]
             .astype(float)
             .values
@@ -297,13 +262,38 @@ class ACF:
 
     # ACF FIRST STAGE
     def est_first_stage(self, degree=2):
-        phi = self._first_stage_fit_phi_poly(degree=degree)
-        # X = sm.add_constant(phi)
-        y = self.df["sale"].values
-        res = sm.OLS(y, phi).fit()  # TODO Figure out what to do with fixed effects
+        #### WITHOUT FE
+        # phi = self._first_stage_fit_phi_poly(degree=degree)
+        # # X = sm.add_constant(phi)
+        # y = self.df["sale"].values
+        # res = sm.OLS(y, phi).fit()
 
-        self.df["phi"] = res.fittedvalues
-        # self.df["phi_resid"] = res.resid
+        # self.df["phi"] = res.fittedvalues
+        # # self.df["phi_resid"] = res.resid
+
+        ###### WITH FE
+        phi_poly = self._first_stage_fit_phi_poly(degree=degree)
+        # Retrieve fixed effects dummies
+        fe = self.df[self.fe_cols].values
+        # Stack polynomial features and fixed effects dummies together.
+        X = np.hstack([phi_poly, fe])
+        y = self.df["sale"].values
+        res = sm.OLS(y, X).fit()
+        # Store the full fitted value (which includes the fixed-effects part)
+        self.df["phi_full"] = res.fittedvalues
+
+        # Remove the estimated fixed effects contribution.
+        # The estimated coefficients are in the order: constant, coefficients for phi_poly,
+        # and then coefficients for the fixed effects dummies.
+        k = phi_poly.shape[1]  # number of polynomial terms
+        # Get the coefficients for the fixed effects
+        fe_coefs = res.params[k:]  # skip constant and phi_poly coefficients
+        fe_effect = (
+            fe @ fe_coefs
+        )  # compute the fixed effects contribution for each observation
+        # Define phi as the part due solely to the polynomial regressors.
+        self.df["phi"] = self.df["phi_full"] - fe_effect
+
         return res
 
     def _first_stage_fit_phi_poly(self, degree=3):

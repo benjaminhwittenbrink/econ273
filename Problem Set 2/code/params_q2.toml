@@ -1,7 +1,9 @@
 # constants
 F = 3
 M = 100 
-N_draws = 1000
+N_draws = 500
+subsample_size = 25
+BS_draws = 100
 
 # profit function params
 alpha = 1

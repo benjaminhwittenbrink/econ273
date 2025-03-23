@@ -32,6 +32,56 @@ def run_reg(df, formula, **kwargs):
     return smf.ols(formula=formula, data=df, **kwargs).fit()
 
 
+def estimate_markups(labor_elas):
+    gmd = load_data()
+
+    wage_data = pd.read_csv("../data/sic5811.csv")
+    wage_data["sic3"] = wage_data["sic"].astype(str).str[:3].astype(int)
+    wage_data["yr"] = wage_data["year"].astype(str).str[-2:].astype(int)
+    wage_data["wage"] = 1000 * wage_data["pay"] / wage_data["emp"]
+
+    # Collapse at sic3/year level taking weighted average with weights being total employment
+    wage_data["wage"] = wage_data["wage"] * wage_data["emp"]
+    wage_data = (
+        (
+            wage_data.groupby(["yr", "sic3"])["wage"].sum()
+            / wage_data.groupby(["yr", "sic3"])["emp"].sum()
+        )
+        .reset_index()
+        .rename(columns={0: "wage"})
+    )
+
+    # wage_data = wage_data.groupby(["sic3", "yr"])["pay"].mean().reset_index()
+
+    df = gmd.merge(wage_data, on=["sic3", "yr"], how="left")
+
+    df["markup"] = labor_elas / (
+        (df["wage"] * 1000 * np.exp(df["emp"])) / (1e6 * np.exp(df["sale"]))
+    )
+
+    # Take average markup
+    markups = df.groupby("yr")["markup"].mean()
+
+    # Take weighted average markup, weighing by total sales
+    df["weighted_markup"] = df["markup"] * df["sale"]
+    weighted_markups = (
+        df.groupby("yr")["weighted_markup"].sum() / df.groupby("yr")["sale"].sum()
+    )
+
+    # %% Plot markup timeseries
+    fig, ax = plt.subplots()
+    ax.plot(markups.index, markups, label="Unweighted Average")
+    ax.plot(
+        weighted_markups.index,
+        weighted_markups,
+        label="Weighted Average",
+    )
+    ax.legend()
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Markup")
+    plt.savefig("../output/markup_timeseries.png")
+
+
 def replicate_GM(df):
     # process data
     df = df.assign(
@@ -373,33 +423,11 @@ class ACF:
 
         return [rho, mu] + list(res.x)
 
-    def _second_stage_optimal_weights_alt(self, params):
-        # Moment condition
-        rho, beta_1, beta_2, beta_3 = params
-        df = self.df.dropna()
-
-        xi_epsilon = df["sale"] - (
-            beta_1 * df["emp"]
-            + beta_2 * df["capital"]
-            + beta_3 * df["rnd"]
-            + rho
-            * (
-                df["phi_lag"]
-                - beta_1 * df["emp_lag"]
-                - beta_2 * df["capital_lag"]
-                - beta_3 * df["rnd_lag"]
-            )
-        )
-
-        # Residualize on fixed effects
-        res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
-        xi_epsilon = np.array(res.resid).T
-
+    def _second_stage_optimal_weights_alt(self, xi_epsilon):
         mat = (self.Z.T * (xi_epsilon**2)) @ self.Z
         return np.linalg.pinv(mat / len(xi_epsilon))
 
-    def _second_stage_objective_alt(self, params, W=np.eye(3)):
-        # Moment condition
+    def _estimate_xi_epsilon(self, params):
         rho, beta_1, beta_2, beta_3 = params
         df = self.df.dropna()
 
@@ -419,6 +447,10 @@ class ACF:
         # Residualize on fixed effects
         res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
         xi_epsilon = np.array(res.resid).T
+        return xi_epsilon
+
+    def _second_stage_objective_alt(self, params, W=np.eye(3)):
+        xi_epsilon = self._estimate_xi_epsilon(params)
 
         loss = (
             (self.Z.T.dot(xi_epsilon)).T
@@ -430,18 +462,16 @@ class ACF:
         # print(params)
         return loss
 
+    def _second_stage_instruments_alt(self):
+        return sm.add_constant(
+            self.df.dropna()[["emp_lag", "capital_lag", "rnd_lag", "phi_lag"]]
+        ).to_numpy()
+
     def est_second_stage_alt(self):
         # Construct instruments
 
         self.df["phi_lag"] = self.df["phi"].groupby(self.df["index"]).shift(1)
-        self.Z = sm.add_constant(
-            self.df.dropna()[
-                ["emp_lag", "capital_lag", "rnd_lag", "invest_lag", "phi_lag"]
-            ]
-        ).to_numpy()
-        # self.Z = self.df.dropna()[
-        #     ["emp_lag", "capital_lag", "rnd_lag", "invest_lag"]
-        # ].to_numpy()
+        self.Z = self._second_stage_instruments_alt()
 
         num_moments = self.Z.shape[1]
 
@@ -458,7 +488,8 @@ class ACF:
         )
 
         # Calculate optimal weights
-        W = self._second_stage_optimal_weights_alt(res.x)
+        xi_epsilon = self._estimate_xi_epsilon(res.x)
+        W = self._second_stage_optimal_weights_alt(xi_epsilon)
 
         # Stage 3
         res = minimize(
@@ -470,8 +501,7 @@ class ACF:
         )
         return res.x
 
-    def _second_stage_objective_survival_control(self, params, W=np.eye(3)):
-        # Moment condition
+    def _estimate_xi_epsilon_survival_control(self, params):
         rho, beta_1, beta_2, beta_3, alpha = params
         df = self.df.dropna()
 
@@ -493,6 +523,11 @@ class ACF:
         res = sm.OLS(xi_epsilon, df[self.fe_cols]).fit()
         xi_epsilon = np.array(res.resid).T
 
+        return xi_epsilon
+
+    def _second_stage_objective_survival_control(self, params, W=np.eye(3)):
+        # Moment condition
+        xi_epsilon = self._estimate_xi_epsilon_survival_control(params)
         loss = (
             (self.Z.T.dot(xi_epsilon)).T
             @ W
@@ -507,37 +542,32 @@ class ACF:
         # Construct instruments
 
         self.df["phi_lag"] = self.df["phi"].groupby(self.df["index"]).shift(1)
-        self.Z = sm.add_constant(
-            self.df.dropna()[
-                ["emp_lag", "capital_lag", "rnd_lag", "invest_lag", "phi_lag"]
-            ]
-        ).to_numpy()
+        self.Z = self._second_stage_instruments_alt()
 
         num_moments = self.Z.shape[1]
 
         # GMM
         # Stage 1
         W = np.eye(num_moments)
-        params_init = [0.5, 0.1, 0.3, 0.5, 0]  # rho + betas + alpha + fe
+        params_init = [0.5, 0.1, 0.3, 0.5, 0]  # rho + betas + alpha
         res = minimize(
             self._second_stage_objective_survival_control,
             params_init,
             args=(W,),
             method="L-BFGS-B",
-            bounds=[(0.00001, None)] * len(params_init),
+            bounds=[(None, None)] * len(params_init),
         )
-        # Get convergence success
-        print(res.success)
 
-        # # Calculate optimal weights
-        # W = self._second_stage_optimal_weights_alt(res.x)
+        # Calculate optimal weights
+        xi_epsilon = self._estimate_xi_epsilon_survival_control(res.x)
+        W = self._second_stage_optimal_weights_alt(xi_epsilon)
 
-        # # Stage 3
-        # res = minimize(
-        #     self._second_stage_objective_alt,
-        #     res.x,
-        #     args=(W,),
-        #     method="L-BFGS-B",
-        #     bounds=[(0.00001, None)] * len(params_init),
-        # )
+        # Stage 3
+        res = minimize(
+            self._second_stage_objective_survival_control,
+            res.x,
+            args=(W,),
+            method="L-BFGS-B",
+            bounds=[(None, None)] * len(params_init),
+        )
         return res.x

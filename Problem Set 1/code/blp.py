@@ -178,12 +178,12 @@ class BLP:
         if self.numerically_integrate:
             nu_vec = None
         else:
-             nu_vec = np.random.lognormal(
-                 mean=self.params["nu"]["mu"],
-                 sigma=self.params["nu"]["sigma"],
-                 size=(self.params["nu"]["n_draws"], self.params["M"]),
-             )
-           # nu_vec = None
+            nu_vec = np.random.lognormal(
+                mean=self.params["nu"]["mu"],
+                sigma=self.params["nu"]["sigma"],
+                size=(self.params["nu"]["n_draws"], self.params["M"]),
+            )
+        # nu_vec = None
 
         # Stage 1: Weights as identity matrix
         params_init = [1]
@@ -197,15 +197,14 @@ class BLP:
             ),
             tol=self.tol,
             method="L-BFGS-B",
-            bounds=[(.1, None)],
+            bounds=[(0.1, None)],
         )
         sigma_alpha = results.x[0]
         if self.verbose:
             stage1 = time.time()
             logger.info("First stage complete in %.2f seconds.", stage1 - start)
 
-
-        '''self.theta = [1.0]
+        """self.theta = [1.0]
         true_sigma = self._compute_gmm_obj(self.theta, weights, nu_vec)
         print(true_sigma)
         self.theta = [0.1]
@@ -213,13 +212,13 @@ class BLP:
         print(sigma_0)
         self.theta = [0.8]
         sigma_8 = self._compute_gmm_obj(self.theta, weights, nu_vec)
-        print(sigma_8)'''
+        print(sigma_8)"""
 
         # Stage 2: Optimal weights
-        
+
         _, _, xi = self._estimate_xi(sigma_alpha, nu_vec=nu_vec)
         weights = self._get_optimal_weights(xi)
-    
+
         # Stage 2: Optimal weights
         _, _, xi = self._estimate_xi(sigma_alpha, nu_vec=nu_vec)
         weights = self._get_optimal_weights(xi)
@@ -232,15 +231,15 @@ class BLP:
             ),
             tol=self.tol,
             method="L-BFGS-B",
-            bounds=[(.1, None)],
+            bounds=[(0.1, None)],
         )
         sigma_alpha = results.x[0]
-        
+
         if self.verbose:
             stage2 = time.time()
             logger.info("Second stage complete in %.2f seconds.", stage2 - stage1)
             logger.info("Total runtime: %.2f seconds.", stage2 - start)
-            
+
         alpha, beta, xi = self._estimate_xi(sigma_alpha, nu_vec=nu_vec)
         if self.verbose:
             logger.info("GMM estimation complete:")

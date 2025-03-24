@@ -1,0 +1,70 @@
+####### Parameters 
+
+J = 3
+I = 100
+p_black = 0.5
+
+# Production function
+gamma_HH = -0.2
+gamma_HL = 0.5
+gamma_LL = -0.5
+gamma_LH = 0.7
+
+# Housing supply 
+iota = 0.05
+phi = 1 
+phi_geo = 0.3
+phi_reg = 0.4
+
+# Amenity supply
+phi_a = 0.5
+
+# Utility
+beta_x  = [0.3, 0.7]
+beta_a  = [0.6, 0.4]
+beta_st = [0.2, 0.5]
+beta_w  = [0.6, 0.5]
+zeta = 0.8
+
+###### Observables
+# Housing supply 
+[x_geo]
+mu = 0 
+sigma = 1 
+
+[x_reg]
+mu = 0
+sigma = 1
+
+[x_st]
+p = 0.1
+
+[CC]
+mu = 0
+sigma = 1
+
+# Amenities
+[x]
+mu = 0
+sigma = 1 
+
+[a]
+mu = 0
+sigma = 1
+
+[dist]
+mu = 0
+sigma = 1
+
+###### Un-Observables
+[epsilon_H]
+mu = 2
+sigma = 1
+
+[epsilon_L]
+mu = 1
+sigma = 1
+
+[epsilon_a]
+mu = 0
+sigma = 1

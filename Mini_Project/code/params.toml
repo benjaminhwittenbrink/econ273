@@ -31,8 +31,8 @@ p_state = 0.1
 
 [L]
 N = 200
-p_black = 0.4
-p_state = 0.2
+p_black = 0.9
+p_state = 0.8
 
 ###### Observables
 # Housing supply 

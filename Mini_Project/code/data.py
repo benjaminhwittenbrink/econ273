@@ -21,11 +21,6 @@ class DiamondData:
             if isinstance(params[key], list):
                 params[key] = np.array(params[key])
 
-    ### Public Methods
-    def simulate(self):
-        self._simulate_exog()
-        self._simulate_endog()
-
     ### Subclass for each demographic group
     class Demographic:
         def __init__(self, params, edu_level="H"):
@@ -49,8 +44,17 @@ class DiamondData:
                 (self.N, self.params["J"]),
             )
 
+    ### Public Methods
+    def simulate(self):
+        self._simulate_exog()
+        self._simulate_endog()
+
     ### Private Methods
     def _simulate_exog(self):
+        """
+        Simulate exogenous variables: housing supply, population demographics, amenities, and shocks.
+        """
+
         ###### Housing Supply ######
         # Initialize housing supply shifters
         self.x_reg = np.random.lognormal(
@@ -119,6 +123,9 @@ class DiamondData:
         self._run_price_fixed_point(init)
 
     def _get_delta(self, wage, rent):
+        """
+        Calculate delta (average utility) for each city given wage and rent.
+        """
         delta = []
         for race in [0, 1]:
             d_z = (
@@ -146,6 +153,10 @@ class DiamondData:
         return prob.sum(axis=0)
 
     def _rent_fixed_point(self, H, L, wage_H, wage_L, tol=1e-7, max_iter=1000):
+        """
+        Find the fixed point for rent given the population and wages.
+        """
+
         def equations(x):
             r = x[: self.params["J"]]
             HD = x[self.params["J"] :]
@@ -171,6 +182,11 @@ class DiamondData:
         return rent
 
     def _find_equilibrium(self, wage_L, wage_H, rent, endog_amenity):
+        """
+        For a given set of prices/amenities, find the equilibrium population.
+        Then, find the prices that those populations would imply.
+        """
+
         # Get probability of being in each city for each type
         H = self._calculate_population(self.HighEd, wage_H, rent)
         L = self._calculate_population(self.LowEd, wage_L, rent)
@@ -201,7 +217,7 @@ class DiamondData:
         """
         wage_L, wage_H, rent, endog_amenity = init, init, init, init
 
-        for i in tqdm(range(max_iter)):
+        for i in range(max_iter):
             H, L, wage_H_new, wage_L_new, rent_new, endog_amenity_new = (
                 self._find_equilibrium(wage_L, wage_H, rent, endog_amenity)
             )
@@ -220,9 +236,6 @@ class DiamondData:
             ):
                 if self.verbose:
                     logger.info(f"Fixed point converged in {i} iterations.")
-                    print(
-                        f"Fixed point converged in {i} iterations ({diff_wage_H}, {diff_wage_L}, {diff_rent},{diff_endog_amenity})."
-                    )
                 break
 
             # Update

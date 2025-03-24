@@ -12,13 +12,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+logging.info("Logger is configured and working.")
+
 # %%
 reload(data)
 
 # %%
 with open("params.toml", "r") as file:
     params = toml.load(file)
-print(params)
 
 DD = data.DiamondData(params)
 DD.simulate()

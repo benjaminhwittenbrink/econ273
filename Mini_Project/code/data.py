@@ -28,21 +28,25 @@ class DiamondData:
 
     ### Subclass for each demographic group
     class Demographic:
-        def __init__(self, params):
+        def __init__(self, params, edu_level="H"):
             self.params = params
+            self.edu_level = edu_level
             self._initialize_params()
 
         def _initialize_params(self):
-            ##### Currently, demographic probabilities are same for both education groups. This can be relaxed if desired.
+            # Number of individuals
+            self.N = self.params[self.edu_level]["N"]
 
             # Set race based on probability of being black
-            self.race = np.random.binomial(1, self.params["p_black"], self.params["I"])
+            self.race = np.random.binomial(
+                1, self.params[self.edu_level]["p_black"], self.N
+            )
 
-            # Set distance from each city randomly
-            self.dist = np.random.lognormal(
-                self.params["dist"]["mu"],
-                self.params["dist"]["sigma"],
-                (self.params["I"], self.params["J"]),
+            # Set probability of being from that state
+            self.same_state = np.random.binomial(
+                1,
+                self.params[self.edu_level]["p_state"],
+                (self.N, self.params["J"]),
             )
 
     ### Private Methods
@@ -71,8 +75,8 @@ class DiamondData:
         )
 
         ###### Population Demographics ######
-        self.HighEd = self.Demographic(self.params)
-        self.LowEd = self.Demographic(self.params)
+        self.HighEd = self.Demographic(self.params, edu_level="H")
+        self.LowEd = self.Demographic(self.params, edu_level="L")
 
         ###### Amenities ######
         self.endog_amenitiy = np.random.lognormal(
@@ -133,7 +137,8 @@ class DiamondData:
 
         util = np.exp(
             delta[demographic.race]
-            + demographic.dist * self.params["beta_st"][demographic.race][:, np.newaxis]
+            + demographic.same_state
+            * self.params["beta_st"][demographic.race][:, np.newaxis]
         )
         tot_util = util.sum(axis=1)
         prob = util / tot_util[:, np.newaxis]

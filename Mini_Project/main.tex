@@ -8,19 +8,7 @@
 \renewcommand{\headrulewidth}{0pt} % remove header rule if desired
 \renewcommand{\footrulewidth}{0pt} % remove footer rule if desired
 % read in parameters
-\newread\varsfile
-\def\assignvar#1=#2\relax{\expandafter\gdef\csname #1\endcsname{#2}}
-\openin\varsfile=vars.txt
-{\endlinechar=-1
-\loop
-\ifeof\varsfile\else
-\read\varsfile to \tmp
-\ifx\tmp\empty\else
-\expandafter\assignvar\tmp\relax
-\fi
-\repeat
-}
-\closein\varsfile
+
 
 \title{14.273 IO Mini-Project}
 \author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}

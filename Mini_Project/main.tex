@@ -7,7 +7,20 @@
 \fancyfoot[C]{\thepage} % page number in the center of the footer
 \renewcommand{\headrulewidth}{0pt} % remove header rule if desired
 \renewcommand{\footrulewidth}{0pt} % remove footer rule if desired
-
+% read in parameters
+\newread\varsfile
+\def\assignvar#1=#2\relax{\expandafter\gdef\csname #1\endcsname{#2}}
+\openin\varsfile=vars.txt
+{\endlinechar=-1
+\loop
+\ifeof\varsfile\else
+\read\varsfile to \tmp
+\ifx\tmp\empty\else
+\expandafter\assignvar\tmp\relax
+\fi
+\repeat
+}
+\closein\varsfile
 
 \title{14.273 IO Mini-Project}
 \author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}
@@ -167,7 +180,21 @@ $$a_{jt}^* = \varphi^a \ln\left(\frac{H_{jt}^*}{L_{jt}^*}\right) + \epsilon_{jt}
 $$\delta_{jt}^z = (w^{X*}_{jt} - \zeta p_{jt}^*)\beta^w z + a_{jt}^* \beta^a z + x_{jt}^A\beta^xz, \quad \forall \bm{z}.$$
 \end{enumerate}
 
+\section{Simulation Procedure}
 
+We simulate the endogenous variables in our model through a simple fixed point procedure that uses our market clearing conditions. Table \ref{tab:parameter_values} lists our parameter values 
+
+
+\begin{table}[H]
+\caption {Entry}
+\begin{center}
+ \label{tab:parameter_values} 
+\begin{tabular}{l|rrr} & Berry & Berry (fixed $\sigma^2$ =1) & Ciliberto and Tamer (95\% CI)\\\hline
+$\hat{\mu}$ & 1.857 & 2.172 & [1.9, 2.7] \\
+$\hat{\sigma^2}$ & 1.145 & NA & NA \\
+\end{tabular}
+\end{center}
+\end{table}
 
 % \section{Extensions}
 

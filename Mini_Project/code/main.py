@@ -24,6 +24,7 @@ with open("params.toml", "r") as file:
 # Write to a .tex file
 with open("../variables.tex", "w") as f:
     for key, value in params.items():
+        key = "params_" + key
         if isinstance(value, str):
             f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
         else:

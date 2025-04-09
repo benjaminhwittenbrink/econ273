@@ -17,7 +17,7 @@ PARAMS = {
     "mu": -1,
     "R": -3,
     "beta": 0.9,
-    "gamma": 0.5775,  # Euler's constant
+    "gamma": 0.57721,  # Euler's constant
 }
 # %%
 R = mh.RustSimulation(

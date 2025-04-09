@@ -30,7 +30,9 @@ with open("../variables.tex", "w") as f:
         else:
             f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
 
-print("variables.tex has been generated!") 
+print("variables.tex has been generated!")
 DD = data.DiamondData(params)
 DD.simulate()
+# %%
+DD.print_results()
 # %%

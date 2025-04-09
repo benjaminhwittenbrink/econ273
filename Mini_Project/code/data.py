@@ -21,6 +21,19 @@ class DiamondData:
             if isinstance(params[key], list):
                 params[key] = np.array(params[key])
 
+    def print_results(self):
+        """
+        Print the results of the simulation.
+        """
+        logger.info("Simulation Results:")
+        logger.info(f"Population: {self.population}")
+        logger.info(f"Wages (High Ed): {self.wage_H}")
+        logger.info(f"Wages (Low Ed): {self.wage_L}")
+        logger.info(f"Rent: {self.rent}")
+        logger.info(f"Amenities: {self.amenity_endog}")
+        logger.info(f"High Ed population: {self.H}")
+        logger.info(f"Low Ed population: {self.L}")
+
     ### Subclass for each demographic group
     class Demographic:
         def __init__(self, params, edu_level="H"):

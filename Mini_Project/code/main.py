@@ -21,16 +21,28 @@ reload(data)
 with open("params.toml", "r") as file:
     params = toml.load(file)
 
-# Write to a .tex file
-with open("../variables.tex", "w") as f:
-    for key, value in params.items():
-        key = "params_" + key
-        if isinstance(value, str):
-            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
-        else:
-            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+def convert_to_latex_macros(dictionary, prefix=""):
+    macros = []
+    for key, value in dictionary.items():
+        latex_key = f"{prefix}{key}"
+        latex_key =  "params" + latex_key.replace("_","")
+        if isinstance(value, dict):  # Handle nested sections
+            macros.extend(convert_to_latex_macros(value, prefix=f"{latex_key}_"))
+        elif isinstance(value, list):  # Handle lists
+            value_str = ", ".join(map(str, value))
+            macros.append(f"\\newcommand{{\\{latex_key}}}{{\\{{{value_str}\\}}}}")
+        else:  # Handle scalar values
+            macros.append(f"\\newcommand{{\\{latex_key}}}{{{value}}}")
+    return macros
 
-print("variables.tex has been generated!") 
+# Generate LaTeX macros
+latex_macros = convert_to_latex_macros(params)
+
+# Save to a LaTeX file
+with open("../variables.tex", "w") as f:
+    f.write("% Auto-generated LaTeX macros from TOML file\n")
+    f.write("\n".join(latex_macros))
+    
 DD = data.DiamondData(params)
 DD.simulate()
 # %%

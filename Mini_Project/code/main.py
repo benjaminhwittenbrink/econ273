@@ -40,9 +40,16 @@ latex_macros = convert_to_latex_macros(params)
 
 # Save to a LaTeX file
 with open("../variables.tex", "w") as f:
-    f.write("% Auto-generated LaTeX macros from TOML file\n")
-    f.write("\n".join(latex_macros))
-    
+    for key, value in params.items():
+        key = "params_" + key
+        if isinstance(value, str):
+            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+        else:
+            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+
+print("variables.tex has been generated!")
 DD = data.DiamondData(params)
 DD.simulate()
+# %%
+DD.print_results()
 # %%

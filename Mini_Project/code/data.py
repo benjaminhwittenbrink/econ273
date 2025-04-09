@@ -21,6 +21,19 @@ class DiamondData:
             if isinstance(params[key], list):
                 params[key] = np.array(params[key])
 
+    def print_results(self):
+        """
+        Print the results of the simulation.
+        """
+        logger.info("Simulation Results:")
+        logger.info(f"Population: {self.population}")
+        logger.info(f"Wages (High Ed): {self.wage_H}")
+        logger.info(f"Wages (Low Ed): {self.wage_L}")
+        logger.info(f"Rent: {self.rent}")
+        logger.info(f"Amenities: {self.amenity_endog}")
+        logger.info(f"High Ed population: {self.H}")
+        logger.info(f"Low Ed population: {self.L}")
+
     ### Subclass for each demographic group
     class Demographic:
         def __init__(self, params, edu_level="H"):
@@ -39,9 +52,7 @@ class DiamondData:
 
             # Set probability of being from that state
             self.same_state = np.random.binomial(
-                1,
-                self.params[self.edu_level]["p_state"],
-                (self.N, self.params["J"]),
+                1, self.params[self.edu_level]["p_state"], (self.N, self.params["J"])
             )
 
     ### Public Methods
@@ -66,9 +77,7 @@ class DiamondData:
 
         # Construction costs (time-varying)
         self.construction_costs = np.random.lognormal(
-            self.params["CC"]["mu"],
-            self.params["CC"]["sigma"],
-            self.params["J"],
+            self.params["CC"]["mu"], self.params["CC"]["sigma"], self.params["J"]
         )
 
         # Supply elasticity
@@ -79,20 +88,16 @@ class DiamondData:
         )
 
         ###### Population Demographics ######
-        self.HighEd = self.Demographic(self.params, edu_level="H")
-        self.LowEd = self.Demographic(self.params, edu_level="L")
+        self.high_ed = self.Demographic(self.params, edu_level="H")
+        self.low_ed = self.Demographic(self.params, edu_level="L")
 
         ###### Amenities ######
         self.endog_amenitiy = np.random.lognormal(
-            self.params["a"]["mu"],
-            self.params["a"]["sigma"],
-            self.params["J"],
+            self.params["a"]["mu"], self.params["a"]["sigma"], self.params["J"]
         )
 
         self.exog_amenitiy = np.random.lognormal(
-            self.params["x"]["mu"],
-            self.params["x"]["sigma"],
-            self.params["J"],
+            self.params["x"]["mu"], self.params["x"]["sigma"], self.params["J"]
         )
 
         ###### Shocks ######
@@ -122,19 +127,74 @@ class DiamondData:
         init = np.ones(self.params["J"])
         self._run_price_fixed_point(init)
 
-    def _get_delta(self, wage, rent):
+    def _run_price_fixed_point(self, init, tol=1e-10, max_iter=10000):
         """
-        Calculate delta (average utility) for each city given wage and rent.
+        Get equilibrium prices and shares.
         """
-        delta = []
-        for race in [0, 1]:
-            d_z = (
-                (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
-                + self.endog_amenitiy * self.params["beta_a"][race]
-                + self.exog_amenitiy * self.params["beta_x"][race]
+        wage_L, wage_H, rent, amenity_endog = init, init, init, init
+
+        for i in range(max_iter):
+            L, H, wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
+                self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
             )
-            delta.append(d_z)
-        return np.array(delta)
+            # If everything has converged, break
+            if (
+                self._convergence_check(wage_H, wage_H_new, tol)
+                and self._convergence_check(wage_L, wage_L_new, tol)
+                and self._convergence_check(rent, rent_new, tol)
+                and self._convergence_check(amenity_endog, amenity_endog_new, tol)
+            ):
+                if self.verbose:
+                    logger.info(f"Fixed point converged in {i} iterations.")
+                break
+
+            # Update
+            wage_H, wage_L, rent, amenity_endog = (
+                wage_H_new,
+                wage_L_new,
+                rent_new,
+                amenity_endog_new,
+            )
+
+        if i == max_iter - 1:
+            print("Price fixed point did not converge.")
+
+        self.population = H + L
+        self.H = H
+        self.L = L
+        self.wage_H = wage_H
+        self.wage_L = wage_L
+        self.rent = rent
+        self.amenity_endog = amenity_endog
+
+    def _find_equilibrium(self, wage_L, wage_H, rent, amenity_endog):
+        """
+        For a given set of prices/amenities, find the equilibrium population.
+        Then, find the prices that those populations would imply.
+        """
+        # Get probability of being in each city for each type
+        H = self._calculate_population(self.high_ed, wage_H, rent)
+        L = self._calculate_population(self.low_ed, wage_L, rent)
+
+        # Update prices given population
+        wage_H = (
+            self.params["gamma_HH"] * np.log(H)
+            + self.params["gamma_HL"] * np.log(L)
+            + self.epsilon_H
+        )
+
+        wage_L = (
+            self.params["gamma_LH"] * np.log(H)
+            + self.params["gamma_LL"] * np.log(L)
+            + self.epsilon_L
+        )
+
+        rent = self._rent_fixed_point(H, L, wage_H, wage_L)
+
+        # Update amenities given population
+        amenity_endog = self.params["phi_a"] * np.log(H / L) + self.epsilon_a
+
+        return L, H, wage_L, wage_H, rent, amenity_endog
 
     def _calculate_population(self, demographic, wage, rent):
         """
@@ -151,6 +211,20 @@ class DiamondData:
         prob = util / tot_util[:, np.newaxis]
 
         return prob.sum(axis=0)
+
+    def _get_delta(self, wage, rent):
+        """
+        Calculate delta (average utility) for each city given wage and rent.
+        """
+        delta = []
+        for race in [0, 1]:
+            d_z = (
+                (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
+                + self.endog_amenitiy * self.params["beta_a"][race]
+                + self.exog_amenitiy * self.params["beta_x"][race]
+            )
+            delta.append(d_z)
+        return np.array(delta)
 
     def _rent_fixed_point(self, H, L, wage_H, wage_L, tol=1e-7, max_iter=1000):
         """
@@ -181,78 +255,8 @@ class DiamondData:
         HD = solution[self.params["J"] :]
         return rent
 
-    def _find_equilibrium(self, wage_L, wage_H, rent, endog_amenity):
+    def _convergence_check(self, x, x_new, tol):
         """
-        For a given set of prices/amenities, find the equilibrium population.
-        Then, find the prices that those populations would imply.
+        Check for convergence.
         """
-
-        # Get probability of being in each city for each type
-        H = self._calculate_population(self.HighEd, wage_H, rent)
-        L = self._calculate_population(self.LowEd, wage_L, rent)
-
-        # Update prices given population
-        wage_H = (
-            self.params["gamma_HH"] * np.log(H)
-            + self.params["gamma_HL"] * np.log(L)
-            + self.epsilon_H
-        )
-
-        wage_L = (
-            self.params["gamma_LH"] * np.log(H)
-            + self.params["gamma_LL"] * np.log(L)
-            + self.epsilon_L
-        )
-
-        rent = self._rent_fixed_point(H, L, wage_H, wage_L)
-
-        # Update amenities given population
-        endog_amenity = self.params["phi_a"] * np.log(H / L) + self.epsilon_a
-
-        return H, L, wage_H, wage_L, rent, endog_amenity
-
-    def _run_price_fixed_point(self, init, tol=1e-10, max_iter=10000):
-        """
-        Get equilibrium prices and shares.
-        """
-        wage_L, wage_H, rent, endog_amenity = init, init, init, init
-
-        for i in range(max_iter):
-            H, L, wage_H_new, wage_L_new, rent_new, endog_amenity_new = (
-                self._find_equilibrium(wage_L, wage_H, rent, endog_amenity)
-            )
-
-            diff_wage_H = np.abs(wage_H_new - wage_H).max()
-            diff_wage_L = np.abs(wage_L_new - wage_L).max()
-            diff_rent = np.abs(rent_new - rent).max()
-            diff_endog_amenity = np.abs(endog_amenity_new - endog_amenity).max()
-
-            # If everything has converged, break
-            if (
-                (diff_wage_H < tol)
-                and (diff_wage_L < tol)
-                and (diff_rent < tol)
-                and (diff_endog_amenity < tol)
-            ):
-                if self.verbose:
-                    logger.info(f"Fixed point converged in {i} iterations.")
-                break
-
-            # Update
-            wage_H, wage_L, rent, endog_amenity = (
-                wage_H_new,
-                wage_L_new,
-                rent_new,
-                endog_amenity_new,
-            )
-
-        if i == max_iter - 1:
-            print("Price fixed point did not converge.")
-
-        self.population = H + L
-        self.H = H
-        self.L = L
-        self.wage_H = wage_H
-        self.wage_L = wage_L
-        self.rent = rent
-        self.endog_amenity = endog_amenity
+        return np.max(np.abs(x_new - x)) < tol

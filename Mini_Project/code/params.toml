@@ -44,9 +44,6 @@ sigma = 1
 mu = 0
 sigma = 1
 
-[x_st]
-p = 0.1
-
 [CC]
 mu = 0
 sigma = 1

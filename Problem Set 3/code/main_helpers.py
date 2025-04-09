@@ -5,7 +5,7 @@ from scipy.optimize import minimize
 def _run_vfi_iter(V, states, theta, beta):
     # Parameters
     mu, R = theta
-    gamma = 0.5775  # Euler's constant
+    gamma = 0.5772  # Euler's constant
     V_next = np.empty_like(V)
     for idx, a in enumerate(states):
         # replace machine (action 1), new state is 1

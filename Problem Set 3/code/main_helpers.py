@@ -2,20 +2,26 @@ import numpy as np
 from scipy.optimize import minimize
 
 
-def _run_vfi_iter(V, states, theta, beta):
+def _run_cvf_iter(V0, V1, states, theta, beta):
     # Parameters
     mu, R = theta
     gamma = 0.5772  # Euler's constant
-    V_next = np.empty_like(V)
-    for idx, a in enumerate(states):
-        # replace machine (action 1), new state is 1
-        v_replace = R + beta * V[0]
-        # don't replace (action 0), new state is min{a + 1, 5}
-        next_state = a + 1 if a < 5 else 5
-        v_no_replace = mu * a + beta * V[next_state - 1]
-        # logsum update (integrates over the T1EV shocks):
-        V_next[idx] = np.log(np.exp(v_replace) + np.exp(v_no_replace)) + gamma
-    return V_next
+    # continuation value (shared across V0, V1)
+    v_cont = np.log(np.exp(V0) + np.exp(V1)) + gamma
+    # action 0: do not replace machine
+    next_state = np.minimum(states + 1, 5)
+    V0_next = mu * states + beta * v_cont[next_state - 1]
+    # action 1: replace machine
+    V1_next_val = R + beta * v_cont[0]
+    V1_next = np.full_like(V1, V1_next_val)
+    return V0_next, V1_next
+
+
+def _convergence_check(x, x_new, tol):
+    """
+    Check for convergence.
+    """
+    return np.max(np.abs(x_new - x)) < tol
 
 
 class MachineReplacementData:
@@ -50,27 +56,37 @@ class MachineReplacementData:
     def run_value_function_iteration(self, tol=1e-6, max_iter=1000):
         # initialize value function vector
         states = np.array([1, 2, 3, 4, 5])
-        V = np.zeros(len(states))
+        V0 = np.zeros(len(states), dtype=float)
+        V1 = np.zeros(len(states), dtype=float)
+
+        # begin value function iteration
         for it in range(max_iter):
             # for each state a, update value function
-            V_next = _run_vfi_iter(
-                V=V,
+            V0_next, V1_next = _run_cvf_iter(
+                V0=V0,
+                V1=V1,
                 states=states,
                 theta=(self.params["mu"], self.params["R"]),
                 beta=self.params["beta"],
             )
             # check for convergence
-            if np.max(np.abs(V_next - V)) < tol:
-                V = V_next.copy()
+            if _convergence_check(V0, V0_next, tol) and _convergence_check(
+                V1, V1_next, tol
+            ):
+                V0, V1 = V0_next.copy(), V1_next.copy()
                 if self.verbose:
                     print(f"Convergence reached after {it+1} iterations.")
                 break
-            V = V_next.copy()
+            V0, V1 = V0_next, V1_next
+
+        # store results
+        self.choice_prob = np.exp(V1) / (np.exp(V0) + np.exp(V1))
+        self.V0 = V0
+        self.V1 = V1
         if self.verbose:
             print("Converged Value Function:")
-            for a, v in zip(states, V):
-                print(f"State a = {a}: V({a}) = {v:.6f}")
-        self.V = V
+            for a, v0, v1, p in zip(states, self.V0, self.V1, self.choice_prob):
+                print(f"a={a}:  V0={v0:8.4f}  V1={v1:8.4f}  P(replace)={p:6.3f}")
 
     # simulate data
     def run_data_simulation(self):
@@ -78,30 +94,23 @@ class MachineReplacementData:
         T = self.params["T"]
         states_t = np.empty(T, dtype=int)
         choices_t = np.empty(T, dtype=int)
-        a = 1
-        # loop over each period
+        rng = np.random.default_rng(self.seed)
+        a = 1  # start with a new machine
         for t in range(T):
             states_t[t] = a
-            # calculate utilities to determine choice (i = 1 or 0)
-            # replace machine (action 1), new state is 1
-            u_replace = self.params["R"] + self.params["beta"] * self.V[0]
-            # don't replace (action 0), new state is min{a + 1, 5}
-            next_a = a + 1 if a < 5 else 5
-            u_no_replace = (
-                self.params["mu"] * a + self.params["beta"] * self.V[next_a - 1]
-            )
             # draw independent draws from T1EV
-            eps_replace = np.random.gumbel(loc=0, scale=1)
-            eps_no_replace = np.random.gumbel(loc=0, scale=1)
-            # calculate utilties
-            U1 = u_replace + eps_replace
-            U0 = u_no_replace + eps_no_replace
-            if U1 > U0:
-                choices_t[t] = 1
+            eps0 = rng.gumbel(loc=0.0, scale=1.0)
+            eps1 = rng.gumbel(loc=0.0, scale=1.0)
+            # calculate utilities to determine choice (i = 1 or 0)
+            u_keep = self.V0[a - 1] + eps0
+            u_replace = self.V1[a - 1] + eps1
+            if u_replace > u_keep:
+                choices_t[t] = 1  # replace
                 a = 1
             else:
-                choices_t[t] = 0
-                a = next_a
+                choices_t[t] = 0  # keep
+                a = a + 1 if a < 5 else 5
+
         if self.verbose:
             print("First 10 simulated states:", states_t[:10])
             print("First 10 simulated choices:", choices_t[:10])
@@ -135,50 +144,43 @@ class MachineReplacementEstimation:
         self.results = res
 
     def _log_likelihood(self, theta, tol=1e-6, max_iter=1000):
-        # Parameters
-        mu, R = theta
-        beta = self.params["beta"]
-
-        V = self._run_value_function_iteration(theta)
-
-        ll = 0.0
-        for a, choice in zip(self.data["states"], self.data["choices"]):
-            # calculate utilties from each action
-            u_replace = R + beta * V[0]
-            next_a = a + 1 if a < 5 else 5
-            u_no_replace = mu * a + beta * V[next_a - 1]
-            # calculate probability of replacing
-            exp_replace = np.exp(u_replace)
-            exp_no_replace = np.exp(u_no_replace)
-            p_replace = exp_replace / (exp_replace + exp_no_replace)
-            # Determine likelihood contribution based on observed choice.
-            if choice == 1:
-                ll += np.log(p_replace)
-            else:
-                ll += np.log(1 - p_replace)
+        V0, V1 = self._run_value_function_iteration(theta)
+        p_replace = np.exp(V1) / (np.exp(V0) + np.exp(V1))
+        p_obs = np.where(
+            self.data["choices"] == 1,
+            p_replace[self.data["states"] - 1],
+            1.0 - p_replace[self.data["states"] - 1],
+        )
+        p_obs = np.clip(p_obs, 1e-12, 1.0)
+        ll = np.log(p_obs).sum()
+        # return negative log-likelihood since we want to minimize
         return -ll
 
     # value function iteration
     def _run_value_function_iteration(self, theta, tol=1e-6, max_iter=1000):
         # initialize value function vector
         states = np.array([1, 2, 3, 4, 5])
-        V = np.zeros(len(states))
+        V0 = np.zeros(len(states))
+        V1 = np.zeros(len(states))
         for it in range(max_iter):
             # for each state a, update value function
-            V_next = _run_vfi_iter(
-                V=V,
+            V0_next, V1_next = _run_cvf_iter(
+                V0=V0,
+                V1=V1,
                 states=states,
                 theta=theta,
                 beta=self.params["beta"],
             )
             # check for convergence
-            if np.max(np.abs(V_next - V)) < tol:
-                V = V_next.copy()
+            if _convergence_check(V0, V0_next, tol) and _convergence_check(
+                V1, V1_next, tol
+            ):
+                V0, V1 = V0_next.copy(), V1_next.copy()
                 if self.verbose:
                     print(f"Convergence reached after {it+1} iterations.")
                 break
-            V = V_next.copy()
-        return V
+            V0, V1 = V0_next, V1_next
+        return V0, V1
     
     def get_replacement_prob(self):
         if self.data is None:

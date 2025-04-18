@@ -12,7 +12,7 @@ from importlib import reload
 # %%
 reload(mh)
 # %%
-PARAMS = {"T": 20_000, "mu": -1, "R": -3, "beta": 0.9}
+PARAMS = {"T": 20_000, "mu": -1, "R": -3, "beta": 0.9, "N_sim": 1_000}
 # %%
 R = mh.MachineReplacementData(
     params=PARAMS,

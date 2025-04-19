@@ -92,11 +92,11 @@ class DiamondData:
         self.low_ed = self.Demographic(self.params, edu_level="L")
 
         ###### Amenities ######
-        self.endog_amenitiy = np.random.lognormal(
+        self.endog_amenity = np.random.lognormal(
             self.params["a"]["mu"], self.params["a"]["sigma"], self.params["J"]
         )
 
-        self.exog_amenitiy = np.random.lognormal(
+        self.exog_amenity = np.random.lognormal(
             self.params["x"]["mu"], self.params["x"]["sigma"], self.params["J"]
         )
 
@@ -220,8 +220,8 @@ class DiamondData:
         for race in [0, 1]:
             d_z = (
                 (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
-                + self.endog_amenitiy * self.params["beta_a"][race]
-                + self.exog_amenitiy * self.params["beta_x"][race]
+                + self.endog_amenity * self.params["beta_a"][race]
+                + self.exog_amenity * self.params["beta_x"][race]
             )
             delta.append(d_z)
         return np.array(delta)

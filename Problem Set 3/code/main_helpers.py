@@ -128,23 +128,46 @@ class MachineReplacementEstimation:
     def get_theta(self):
         return np.round(self.results.x, 5)
 
-    def estimate_theta(self, initial_guess=None):
+    def estimate_theta(self, approach, initial_guess=None, F0=None, F1= None, N_sim = None, T=None):
         if self.data is None:
             raise ValueError("No data to estimate from.")
         # Parameters
         if initial_guess is None:
             initial_guess = np.array([-0.5, -0.5])
-
+        # simulate the draws outside the parameter estimation for forward simulation
+        if approach == "Forward Simulation": 
+            replacement_freq = self.get_replacement_prob()
+            sim_val_1 = [self.forward_simulation_draws(F0, F1, replacement_freq, N_sim, 1, age, T) for age in range(1,6)]
+            sim_val_0 =  [self.forward_simulation_draws(F0, F1, replacement_freq, N_sim, 0, age, T) for age in range(1,6)] 
+        else:
+            sim_val_0 = None
+            sim_val_1 = None
+        
         res = minimize(
             fun=self._log_likelihood,
             x0=initial_guess,
-            args=(self.data,),
+            args=(approach, sim_val_0, sim_val_1, T),
             method="L-BFGS-B",
         )
         self.results = res
-
-    def _log_likelihood(self, theta, tol=1e-6, max_iter=1000):
-        V0, V1 = self._run_value_function_iteration(theta)
+    def _log_likelihood(self, theta, approach="Rust", sim_val_0 = None, sim_val_1=None, T = None, tol=1e-6, max_iter=1000,):
+        
+        if approach == "Rust":
+            V0, V1 = self._run_value_function_iteration(theta)
+        if approach == "Forward Simulation":
+            V0, V1 = self._forward_sim(theta, sim_val_0, sim_val_1, T)
+        if approach == "Analytical" : 
+            V1 = np.zeros(5)
+            beta = self.params["beta"]
+            replacement_freq = self.get_replacement_prob()
+            def AM_formula(theta, age, replacement_freq): 
+                replacement_freq =np.array([value for value in replacement_freq.values()])
+                next_age= np.minimum(age+1,5)
+                mu, R = theta
+                out=  mu*age - R - beta*(np.log(replacement_freq[next_age-1]) - np.log(replacement_freq[0]))
+                return out
+            V0 = np.array([AM_formula(theta, age, replacement_freq) for age in range(1,6)])
+        
         p_replace = np.exp(V1) / (np.exp(V0) + np.exp(V1))
         p_obs = np.where(
             self.data["choices"] == 1,
@@ -194,28 +217,23 @@ class MachineReplacementEstimation:
         return replacement_freq
     
     # forward simulation function
-    N_sim = 1000 
-    T = 20000
-    F0  = np.array([[0, 1, 0, 0, 0], [0,0,1,0,0], [0,0,0,1,0], [0,0,0,0,1], [0,0,0,0,1]])
-    F1 = np.array([[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0]])
-    replacement_init_0= np.zeros(N_sim)
-    replacement_init_1= np.ones(N_sim)
-
-    replacement_freq = get_replacement_prob(mod)
-    def forward_simulation_draws(F0, F1, replacement_freq,N_sim, init_replace, T):
+    def forward_simulation_draws(self, F0, F1, replacement_freq,N_sim, init_replace, init_age, T):
         #initialize
         transition_matrices = [F0, F1]
-        age_init = np.ones(N_sim)
-        replacement_init = [replacement_init_0, replacement_init_1]
+        age_init = np.ones(N_sim, dtype = int)*int(init_age)
+        replacement_init = [np.zeros(N_sim), np.ones(N_sim)]
         age_outcomes = np.array([1,2,3,4,5])
-        
+        #convert from dict to array for indexing
+        replacement_freq =np.array([value for value in replacement_freq.values()])
     
-        def draw_age(x, age_state, replacement_state):
-            draw = np.random.choice(a=age_outcomes,p= transition_matrices[int(replacement_state[x])][int(age_state[x])-1])
-            return draw
+        def draw_age(age_state, replacement_state):
+            # form the CDF 
+            draw = replacement_state + (1-replacement_state)*np.minimum(age_state+1,5)
+            return draw.astype(int)
         
-        def draw_replacement(x, age_state, replacement_freq):
-            draw = np.random.binomial(n=1, p = replacement_freq[int(age_state[x])])
+        def draw_replacement(age_state, replacement_freq):
+            replacement_probs = replacement_freq[age_state-1]
+            draw = np.random.binomial(n=1, p = replacement_probs)
             return draw 
         
 
@@ -223,36 +241,39 @@ class MachineReplacementEstimation:
         replacements = np.zeros((T, N_sim))
         ages[0,:]= age_init
         replacements[0,:] = replacement_init[init_replace]
-        age_draw= np.array([draw_age(x, age_init, replacement_init[init_replace]) for x in range(N_sim)])
+        age_draw= draw_age( age_init, replacement_init[init_replace])
         ages[1,:]= age_draw
-        replacement_draw = np.array([draw_replacement(x, age_draw, replacement_freq) for x in range(N_sim)])
+        replacement_draw = draw_replacement(age_draw, replacement_freq) 
         replacements[1,:] = replacement_draw
         for i in range(2,T):
-            age_draw= np.array([draw_age(x, age_draw, replacement_draw) for x in range(N_sim)])
+            age_draw= draw_age( age_draw, replacement_draw)
             ages[i,:]= age_draw
-            replacement_draw = np.array([draw_replacement(x, age_draw, replacement_freq) for x in range(N_sim)])
+            replacement_draw = draw_replacement(age_draw, replacement_freq) 
             replacements[i,:] = replacement_draw
          
         # calculate epsilon
         # get array of replacement frequencies 
-        replacement_array = []
-        for a,b in replacement_freq.items(): 
-            replacement_array.append(b)
-        replacement_array = np.array(replacement_array)
-     
-        epsilons = .5772 - np.log(replacement_array[ages.astype(int)-1]*replacements +(1-replacements)*(1-replacement_array[ages.astype(int)-1]))
-
-            
+        lagged_ages = ages[:-1,:]
+        epsilons = .5772 - np.log(replacement_freq[lagged_ages.astype(int)-1]*replacements[1:,:] +(1-replacements[1:,:])*(1-replacement_freq[lagged_ages.astype(int)-1]))
+        epsilons = np.vstack((np.zeros((1, N_sim)), epsilons))
         return np.mean(ages, axis =1), np.mean(replacements, axis=1), np.mean(epsilons, axis =1)
     
-    
-ages_1, replacements_1, epsilons_1, = forward_simulation_draws(F0, F1, replacement_freq, N_sim, 0, T)
-ages_0, replacements_0, epsilons_0 =  forward_simulation_draws(F0, F1, replacement_freq, N_sim, 1, T)
-
-def forward_sim(theta, beta, ages_0, ages_1, replacements_0, replacements_1): 
-    mu, R = theta 
-    betas = np.array([beta**t for t in range(T)])
-    utilities_0 = betas*(R*replacements_0 + mu*ages_0*(1-replacements_0) + epsilons_0)
-    utilities_1 = betas*(R*replacements_1 + mu*ages_1*(1-replacements_1) + epsilons_1)
-    utilities_0 = np.mean(axis=0, )
+    def _forward_sim(self, theta,  sim_val_0, sim_val_1, T): 
+        def _age_specific(self, theta,  sim_val_0, sim_val_1, T, age):
+            beta=self.params["beta"]
+            ages_0 = sim_val_0[age-1][0]
+            replacements_0 = sim_val_0[age-1][1]
+            epsilons_0 = sim_val_0[age-1][2]
+            ages_1 = sim_val_1[age-1][0]
+            replacements_1 = sim_val_1[age-1][1]
+            epsilons_1 = sim_val_1[age-1][2]
+            mu, R = theta 
+            betas = np.array([beta**t for t in range(T)])
+            utilities_0 = betas*(R*replacements_0 + mu*ages_0*(1-replacements_0) + epsilons_0)
+            utilities_1 = betas*(R*replacements_1 + mu*ages_1*(1-replacements_1) + epsilons_1)
+            return np.sum(utilities_0), np.sum(utilities_1)
+        out= np.array([_age_specific(self, theta, sim_val_0, sim_val_1, T, age) for age in range(1,6)])
+        V0 = out[:,0]
+        V1 = out[:,1]
+        return V0, V1
     # get replacement probabilities for each age 

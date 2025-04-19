@@ -34,7 +34,39 @@ mod = mh.MachineReplacementEstimation(
 )
 
 # %%
-mod.estimate_theta()
+mod.estimate_theta(approach="Rust")
+Rust = mod.get_theta()
+
 # %%
-mod.get_theta()
+
+# %%
+F0  = np.array([[0, 1, 0, 0, 0], [0,0,1,0,0], [0,0,0,1,0], [0,0,0,0,1], [0,0,0,0,1]])
+F1 = np.array([[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0],[1,0,0,0,0]])
+mod.estimate_theta(approach="Forward Simulation", N_sim=PARAMS["N_sim"], T= PARAMS["T"], F0 = F0, F1 = F1)    
+ForSim = mod.get_theta()
+
+# %%
+mod.estimate_theta(approach="Analytical")
+AM = mod.get_theta()
+
+# %%
+# make latex table of results
+### make latex table of results
+headers = ["Nested Fixed Point","Arcidiacono-Miller", "Forward Simulation"]
+data = dict()
+data["$\hat{\mu}$"] = [ round(Rust[0],3), round(AM[0],3) , round(ForSim[0],3) ]
+data["$\hat{R}$"] = [ round(Rust[1],3), round(AM[1],3) , round(ForSim[1],3) ]
+textabular = f"l|{'r'*len(headers)}"
+texheader = " & " + " & ".join(headers) + "\\\\"
+texdata = "\\hline\n"
+for label in sorted(data):
+   if label == "z":
+      texdata += "\\hline\n"
+   texdata += f"{label} & {' & '.join(map(str,data[label]))} \\\\\n"
+
+out_string = "\\begin{tabular}{"+textabular+"}" + texheader + texdata + "\\end{tabular}"
+f = open("../tables/results.tex", "w")
+f.write(out_string)
+f.close()
+
 # %%

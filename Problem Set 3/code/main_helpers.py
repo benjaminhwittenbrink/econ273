@@ -1,5 +1,11 @@
+from typing import Dict, Literal, Optional, Tuple
+
+
 import numpy as np
 from scipy.optimize import minimize
+
+
+Approach = Literal["Rust", "Forward Simulation", "Analytical"]
 
 
 def _run_cvf_iter(V0, V1, states, theta, beta):
@@ -7,7 +13,7 @@ def _run_cvf_iter(V0, V1, states, theta, beta):
     mu, R = theta
     gamma = 0.5772  # Euler's constant
     # continuation value (shared across V0, V1)
-    v_cont = np.log(np.exp(V0) + np.exp(V1)) + gamma
+    v_cont = np.logaddexp(V0, V1) + gamma
     # action 0: do not replace machine
     next_state = np.minimum(states + 1, 5)
     V0_next = mu * states + beta * v_cont[next_state - 1]
@@ -119,103 +125,151 @@ class MachineReplacementData:
 
 
 class MachineReplacementEstimation:
-    def __init__(self, data, params, verbose=False):
+    def __init__(
+        self,
+        data: Dict[str, np.array],
+        params: Dict[str, float],
+        seed: Optional[int] = None,
+        verbose: bool = False,
+    ) -> None:
+        if {"states", "choices"} - data.keys():
+            raise ValueError("Data must contain 'states' and 'choices' keys.")
         self.data = data
         self.params = params
         self.verbose = verbose
-        self.results = None
+        self.seed = np.random.default_rng(seed) if seed else np.random.default_rng()
+        self._results = None
 
-    def get_theta(self):
-        return np.round(self.results.x, 5)
+    def is_estimated(self) -> bool:
+        return self._results is not None
+
+    def get_theta_hat(self) -> Tuple[float, float]:
+        if self.is_estimated():
+            return tuple(np.round(self._results.x, 5))
+        raise ValueError("Theta has not been estimated yet.")
 
     def estimate_theta(
-        self, approach, initial_guess=None, F0=None, F1=None, N_sim=None, T=None
+        self,
+        approach: Approach,
+        initial_guess: Optional[np.array] = None,
+        # F0=None,
+        # F1=None,
+        N_sim: int = 5_000,
+        # T=None,
     ):
-        if self.data is None:
-            raise ValueError("No data to estimate from.")
-        if initial_guess is None:
-            initial_guess = np.array([-0.5, -0.5])
-        # simulate the draws outside the parameter estimation for forward simulation
+        initial_guess = (
+            np.asarray(initial_guess, float)
+            if initial_guess is not None
+            else np.array([-0.5, -0.5])
+        )
+        # for forward simulation, we need to precompute forward sims
+        sim_cache = None
         if approach == "Forward Simulation":
-            replacement_freq = self.get_replacement_prob()
-            sim_val_1 = [
-                self.forward_simulation_draws(
-                    F0, F1, replacement_freq, N_sim, 1, age, T
-                )
-                for age in range(1, 6)
-            ]
-            sim_val_0 = [
-                self.forward_simulation_draws(
-                    F0, F1, replacement_freq, N_sim, 0, age, T
-                )
-                for age in range(1, 6)
-            ]
-        else:
-            sim_val_0 = None
-            sim_val_1 = None
+            replacement_prob = self._get_empirical_replacement_prob()
+            sim_cache = self._precompute_forward_simulation(replacement_prob, N_sim)
+            print("Precomputed forward simulation values.")
+        # simulate the draws outside the parameter estimation for forward simulation
+        # if approach == "Forward Simulation":
+        #     replacement_freq = self.get_replacement_prob()
+        #     sim_val_1 = [
+        #         self.forward_simulation_draws(
+        #             F0, F1, replacement_freq, N_sim, 1, age, T
+        #         )
+        #         for age in range(1, 6)
+        #     ]
+        #     sim_val_0 = [
+        #         self.forward_simulation_draws(
+        #             F0, F1, replacement_freq, N_sim, 0, age, T
+        #         )
+        #         for age in range(1, 6)
+        #     ]
+        # else:
+        #     sim_val_0 = None
+        #     sim_val_1 = None
 
         res = minimize(
             fun=self._log_likelihood,
             x0=initial_guess,
-            args=(approach, sim_val_0, sim_val_1, T),
+            args=(approach, sim_cache),
             method="L-BFGS-B",
         )
-        self.results = res
+        if not res.success:
+            raise RuntimeError(
+                f"Optimization failed: {res.message} (status code: {res.status})"
+            )
+        self._results = res
 
     def _log_likelihood(
         self,
-        theta,
-        approach="Rust",
-        sim_val_0=None,
-        sim_val_1=None,
-        T=None,
-        tol=1e-6,
-        max_iter=1000,
+        theta: np.array,
+        approach: Approach,
+        sim_cache: Optional[Tuple[np.array, np.array]] = None,
+        # T=None
     ):
-
-        if approach == "Rust":
-            V0, V1 = self._run_value_function_iteration(theta)
-        if approach == "Forward Simulation":
-            V0, V1 = self._forward_sim(theta, sim_val_0, sim_val_1, T)
-        if approach == "Analytical":
-            V1 = np.zeros(5)
-            beta = self.params["beta"]
-            replacement_freq = self.get_replacement_prob()
-
-            def AM_formula(theta, age, replacement_freq):
-                replacement_freq = np.array(
-                    [value for value in replacement_freq.values()]
-                )
-                next_age = np.minimum(age + 1, 5)
-                mu, R = theta
-                out = (
-                    mu * age
-                    - R
-                    - beta
-                    * (
-                        np.log(replacement_freq[next_age - 1])
-                        - np.log(replacement_freq[0])
+        match approach:
+            case "Rust":
+                V0, V1 = self._run_value_function_iteration(theta)
+            case "Forward Simulation":
+                if sim_cache is None:
+                    raise ValueError(
+                        "Simulation cache is required for forward simulation."
                     )
-                )
-                return out
+                V0, V1 = self._run_forward_sim(theta, *sim_cache)
+            case "Analytical":
+                V0, V1 = self._est_analytical_approx(theta)
+            case _:  # equivalent of else
+                raise ValueError(f"Unknown approach: {approach}.")
 
-            V0 = np.array(
-                [AM_formula(theta, age, replacement_freq) for age in range(1, 6)]
-            )
+        # if approach == "Rust":
+        #     V0, V1 = self._run_value_function_iteration(theta)
+        # if approach == "Forward Simulation":
+        #     V0, V1 = self._forward_sim(theta, sim_val_0, sim_val_1, T)
+        # if approach == "Analytical":
+        #     V1 = np.zeros(5)
+        #     beta = self.params["beta"]
+        #     replacement_freq = self.get_replacement_prob()
 
-        p_replace = np.exp(V1) / (np.exp(V0) + np.exp(V1))
+        #     def AM_formula(theta, age, replacement_freq):
+        #         replacement_freq = np.array(
+        #             [value for value in replacement_freq.values()]
+        #         )
+        #         next_age = np.minimum(age + 1, 5)
+        #         mu, R = theta
+        #         out = (
+        #             mu * age
+        #             - R
+        #             - beta
+        #             * (
+        #                 np.log(replacement_freq[next_age - 1])
+        #                 - np.log(replacement_freq[0])
+        #             )
+        #         )
+        #         return out
+
+        #     V0 = np.array(
+        #         [AM_formula(theta, age, replacement_freq) for age in range(1, 6)]
+        #     )
+        # avoid numerical issues by using logaddexp
+        p_replace = np.exp(V1 - np.logaddexp(V0, V1))
         p_obs = np.where(
             self.data["choices"] == 1,
             p_replace[self.data["states"] - 1],
             1.0 - p_replace[self.data["states"] - 1],
         )
+        # clip to avoid log(0)
         p_obs = np.clip(p_obs, 1e-12, 1.0)
         ll = np.log(p_obs).sum()
         # return negative log-likelihood since we want to minimize
         return -ll
 
-    # value function iteration
-    def _run_value_function_iteration(self, theta, tol=1e-6, max_iter=1000):
+    # ------------------------------------------------------------------
+    # Approach‑specific value functions
+    # ------------------------------------------------------------------
+
+    # 1. Nested fixed point (Rust)
+    def _run_value_function_iteration(
+        self, theta: np.array, tol: float = 1e-6, max_iter: int = 1_000
+    ):
         # initialize value function vector
         states = np.array([1, 2, 3, 4, 5])
         V0 = np.zeros(len(states))
@@ -240,17 +294,89 @@ class MachineReplacementEstimation:
             V0, V1 = V0_next, V1_next
         return V0, V1
 
-    def get_replacement_prob(self):
-        if self.data is None:
-            raise ValueError("Data has not been simulated yet.")
-        # Count frequencies for states
-        unique_states = np.unique(self.data["states"])
-        replacement_freq = {
-            state: np.mean(self.data["choices"][self.data["states"] == state])
-            for state in unique_states
-        }
+    # 2. Forward simulation
+    def _get_empirical_replacement_prob(self) -> np.array:
+        return np.array(
+            [
+                np.mean(self.data["choices"][self.data["states"] == s])
+                for s in np.unique(self.data["states"])
+            ],
+            dtype=float,
+        )
 
-        return replacement_freq
+    def _precompute_forward_simulation(
+        self, replacement_prob: np.array, N_sim: int
+    ) -> Tuple[np.array, np.array]:
+        # beta_pows = self.params["beta"] ** np.arange(self.params["T"])[:, None, None]
+        states = np.unique(self.data["states"])
+        V0_sims = np.zeros((len(states), self.params["T"], 3))
+        V1_sims = np.zeros((len(states), self.params["T"], 3))
+        for age0 in states:
+            for init_rep in (0, 1):
+                ages, replacements, epsilons = self._simulate_paths(
+                    replacement_prob,
+                    N=N_sim,
+                    a0=age0,
+                    r0=init_rep,
+                )
+                util_stream = self._calc_flow_utilities(
+                    theta=None, ages=ages, repl=replacements, eps=epsilons
+                )
+                # util_discounted = util_stream * beta_pows
+                # util_avg = util_discounted.sum(axis=0).mean(axis=0)
+                target = V1_sims if init_rep else V0_sims
+                target[age0 - 1] = util_stream.mean(axis=1)
+        return V0_sims, V1_sims
+
+    def _simulate_paths(
+        self, replacement_prob: np.array, N: int, a0: int, r0: int
+    ) -> Tuple[np.array, np.array, np.array]:
+
+        ages = np.zeros((self.params["T"], N), dtype=int)
+        repl = np.zeros((self.params["T"], N), dtype=int)
+        ages[0, :] = a0
+        repl[0, :] = r0
+        for t in range(1, self.params["T"]):
+            ages[t] = np.where(repl[t - 1] == 1, 1, np.minimum(ages[t - 1] + 1, 5))
+            probs = replacement_prob[ages[t] - 1]
+            repl[t] = self.seed.binomial(1, probs)
+
+        # Gumbel draws
+        lag_ages = ages[:-1]
+        probs = replacement_prob[lag_ages - 1]
+        eps = 0.5772 - np.log(probs * repl[1:] + (1 - repl[1:]) * (1 - probs))
+        eps = np.vstack((np.zeros((1, N)), eps))
+        return ages, repl, eps
+
+    def _calc_flow_utilities(
+        self,
+        theta: Optional[np.array],
+        ages: np.array,
+        repl: np.array,
+        eps: np.array,
+    ) -> np.array:
+        if theta is not None:
+            mu, R = theta
+            return R * repl + mu * ages * (1 - repl) + eps
+        return np.stack((ages * (1 - repl), repl, eps), axis=-1)
+
+    def _run_forward_sim(self, theta, V0_sims, V1_sims) -> Tuple[np.array, np.array]:
+        mu, R = theta
+        beta_pows = self.params["beta"] ** np.arange(self.params["T"])
+        beta_pows = beta_pows[None, :, None]
+
+        # Broadcast beta_t over the time axis and collapse with .sum(axis=1)
+        def _discount(cache: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+            # cache shape: (5, T, 3)
+            disc_age = (cache * beta_pows).sum(axis=1)  # → (5, 3)
+            return disc_age[:, 0], disc_age[:, 1], disc_age[:, 2]
+
+        a0_V0, rep_V0, eps_V0 = _discount(V0_sims)
+        a0_V1, rep_V1, eps_V1 = _discount(V1_sims)
+
+        V0 = mu * a0_V0 + R * rep_V0 + eps_V0
+        V1 = mu * a0_V1 + R * rep_V1 + eps_V1
+        return V0, V1
 
     # forward simulation function
     def forward_simulation_draws(
@@ -307,7 +433,6 @@ class MachineReplacementEstimation:
 
     def _forward_sim(self, theta, sim_val_0, sim_val_1, T):
         def _age_specific(self, theta, sim_val_0, sim_val_1, T, age):
-            beta = self.params["beta"]
             ages_0 = sim_val_0[age - 1][0]
             replacements_0 = sim_val_0[age - 1][1]
             epsilons_0 = sim_val_0[age - 1][2]
@@ -315,7 +440,7 @@ class MachineReplacementEstimation:
             replacements_1 = sim_val_1[age - 1][1]
             epsilons_1 = sim_val_1[age - 1][2]
             mu, R = theta
-            betas = np.array([beta**t for t in range(T)])
+            betas = np.array([self.params["beta"] ** t for t in range(T)])
             utilities_0 = betas * (
                 R * replacements_0 + mu * ages_0 * (1 - replacements_0) + epsilons_0
             )
@@ -333,5 +458,3 @@ class MachineReplacementEstimation:
         V0 = out[:, 0]
         V1 = out[:, 1]
         return V0, V1
-
-    # get replacement probabilities for each age

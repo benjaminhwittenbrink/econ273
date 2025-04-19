@@ -3,11 +3,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 # %%
 import main_helpers as mh
 
+
 # %%
 from importlib import reload
+
 
 # %%
 reload(mh)
@@ -22,6 +25,7 @@ R = mh.MachineReplacementData(
 # %%
 R.run_value_function_iteration()
 
+
 # %%
 R.run_data_simulation()
 # %%
@@ -29,16 +33,39 @@ R.get_data_frequencies()
 # %%
 mod = mh.MachineReplacementEstimation(
     data=R.get_data(),
-    params={"beta": 0.9},
+    params={"beta": 0.9, "T": PARAMS["T"]},
     verbose=True,
 )
 
+
+# % %
+reload(mh)
+mod = mh.MachineReplacementEstimation(
+    data=R.get_data(),
+    params={"beta": 0.9, "T": PARAMS["T"]},
+    verbose=True,
+)
+mod.estimate_theta(
+    approach="Forward Simulation",
+    N_sim=PARAMS["N_sim"],
+    # T=PARAMS["T"],
+    # F0=F0,
+    # F1=F1,
+)
+mod.get_theta_hat()
 # %%
 mod.estimate_theta(approach="Rust")
-Rust = mod.get_theta()
+Rust = mod.get_theta_hat()
+
 
 # %%
-
+mod.estimate_theta(
+    approach="Forward Simulation",
+    N_sim=PARAMS["N_sim"],
+    # T=PARAMS["T"],
+    # F0=F0,
+    # F1=F1,
+)
 # %%
 F0 = np.array(
     [
@@ -59,13 +86,19 @@ F1 = np.array(
     ]
 )
 mod.estimate_theta(
-    approach="Forward Simulation", N_sim=PARAMS["N_sim"], T=PARAMS["T"], F0=F0, F1=F1
+    approach="Forward Simulation",
+    N_sim=PARAMS["N_sim"],
+    # T=PARAMS["T"],
+    # F0=F0,
+    # F1=F1,
 )
 ForSim = mod.get_theta()
+
 
 # %%
 mod.estimate_theta(approach="Analytical")
 AM = mod.get_theta()
+
 
 # %%
 # make latex table of results
@@ -82,11 +115,13 @@ for label in sorted(data):
         texdata += "\\hline\n"
     texdata += f"{label} & {' & '.join(map(str,data[label]))} \\\\\n"
 
+
 out_string = (
     "\\begin{tabular}{" + textabular + "}" + texheader + texdata + "\\end{tabular}"
 )
 f = open("../tables/results.tex", "w")
 f.write(out_string)
 f.close()
+
 
 # %%

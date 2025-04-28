@@ -3,9 +3,11 @@ from scipy import optimize as opt
 
 
 class EntryExit:
-    def __init__(self, params, verbose=False):
+    def __init__(self, params, verbose=False, seed=14_273):
         self.params = params
         self.verbose = verbose
+        self.seed = seed
+        np.random.seed(seed)
 
         self._result_order = ["V00", "V01", "V10", "V11", "p00", "p01", "p10", "p11"]
 
@@ -17,6 +19,12 @@ class EntryExit:
 
     def get_params(self):
         return self.params
+
+    def psi_draw(self):
+        return np.random.uniform(0, 1)
+
+    def phi_draw(self):
+        return np.random.uniform(0, 1)
 
     def print_results(self):
         """
@@ -123,3 +131,63 @@ class EntryExit:
                 p11 - p11_rhs,
             ]
         )
+
+    def val_enter_exit(self, psi, phi, my_state, other_state):
+        """
+        Calculate the value of entering or exiting the market.
+        """
+
+        # Probability that the other player enters, given the current state
+        p = self.results[f"p{my_state}{other_state}"]
+
+        EV_in = p * self.results["V11"] + (1 - p) * self.results["V10"]
+        EV_out = p * self.results["V01"] + (1 - p) * self.results["V00"]
+
+        if my_state == 0:
+            profit = 0
+            enter_cost = self.params["C"] + psi
+            scraps = 0
+        elif my_state == 1 and other_state == 0:
+            profit = 2 * self.params["A"]
+            enter_cost = 0
+            scraps = phi
+        elif my_state == 1 and other_state == 1:
+            profit = 2 * self.params["A"] - self.params["B"]
+            enter_cost = 0
+            scraps = phi
+
+        val_enter = profit - enter_cost + self.params["delta"] * EV_in
+        val_exit = profit + scraps + self.params["delta"] * EV_out
+
+        return val_enter, val_exit
+
+    def _choose_next_state(self, my_state, other_state):
+        psi = self.psi_draw()
+        phi = self.phi_draw()
+
+        val_enter, val_exit = self.val_enter_exit(psi, phi, my_state, other_state)
+        next_state = int(np.argmax([val_exit, val_enter]))
+        return next_state, psi, phi
+
+    def simulate_data(self, num_periods=10):
+        """
+        Simulate data based on the solved system of equations.
+        """
+
+        states = []  # Initialize at (0,0)
+        psi_draws = []
+        phi_draws = []
+        for t in range(num_periods):
+            if t == 0:
+                state = (0, 0)
+            else:
+                state = states[-1]
+
+            next_state1, psi1, phi1 = self._choose_next_state(state[0], state[1])
+            next_state2, psi2, phi2 = self._choose_next_state(state[1], state[0])
+
+            states.append((next_state1, next_state2))
+            psi_draws.append((psi1, psi2))
+            phi_draws.append((phi1, phi2))
+
+        return np.array(states), np.array(psi_draws), np.array(phi_draws)

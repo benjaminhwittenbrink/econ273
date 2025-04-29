@@ -19,17 +19,7 @@ EE = mh.EntryExit(PARAMS, verbose=True)
 EE.solve_system()
 
 # %% Generate data
-states, psi, phi = EE.simulate_data()
-
-print(states[:, 0])
-print(states[:, 1])
-
-print("Psi:")
-print(psi[:, 0].round(2))
-print(psi[:, 1].round(2))
-
-print("Phi:")
-print(phi[:, 0].round(2))
-print(phi[:, 1].round(2))
+EE.simulate_data()
 
 # %% Solve for parameters
+EE.estimate_model()

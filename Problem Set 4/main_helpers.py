@@ -9,6 +9,8 @@ class EntryExit:
         self.seed = seed
         np.random.seed(seed)
 
+        self.states = None
+
         self._result_order = ["V00", "V01", "V10", "V11", "p00", "p01", "p10", "p11"]
 
     def set_params(self, params):
@@ -48,91 +50,83 @@ class EntryExit:
             initial_guess,
             method="hybr",
             options={"xtol": 1e-8},
+            args=(
+                self.params["A"],
+                self.params["B"],
+                self.params["C"],
+            ),
         )
         if sol.success:
-            if self.verbose:
-                print("Solution found:", sol.x)
             self.results = dict(zip(self._result_order, sol.x))
+            if self.verbose:
+                print("Solution found:")
+                for key, value in self.results.items():
+                    # Print rounded result to 2 decimal places
+                    print(f"{key}: {value:.2f}")
         else:
             raise ValueError("Root finding failed: " + sol.message)
 
-    def _optimize_system_func(self, x):
+    def _optimize_system_func(self, x, A, B, C):
         """
         Objective function to be minimized.
         """
         # Unpack the parameters
         V00, V01, V10, V11, p00, p01, p10, p11 = x
-        A, B, C, delta = (
-            self.params["A"],
-            self.params["B"],
-            self.params["C"],
-            self.params["delta"],
-        )
 
         # helpful defs
-        S11_01 = V11 + V01
-        S10_00 = V10 + V00
-        D11_01 = V11 - V01
-        D10_00 = V10 - V00
+        q00 = 1 - p00
+        q01 = 1 - p01
+        q10 = 1 - p10
+        q11 = 1 - p11
 
-        # Construct the system of equations
-        # value function equations
-        # 1. V(0, 0)
-        V00_frac_term = (C + delta * (p00 * S11_01 + (1 - p00) * S10_00)) / 2
-        V00_rhs = p00 * V00_frac_term + (1 - p00) * (
-            delta * (p00 * V01 + (1 - p00) * V00)
+        delta = self.params["delta"]
+        pi10 = 2 * A
+        pi11 = 2 * A - B
+
+        #### Construct the system of equations
+        # value‐function updates
+        V00_new = -p00 * (C - p00 / 2) + delta * (
+            p00**2 * V11 + p00 * q00 * V10 + p00 * q00 * V01 + q00**2 * V00
         )
 
-        # 2. V(0, 1)
-        V01_frac_term = (-C + delta * (p10 * S11_01 + (1 - p10) * S10_00)) / 2
-        V01_rhs = p01 * V01_frac_term + (1 - p01) * (
-            delta * (p10 * V01 + (1 - p10) * V00)
+        V01_new = -p01 * (C + p01 / 2) + delta * (
+            p10 * p01 * V11 + p10 * q01 * V10 + p01 * q10 * V01 + q01 * q10 * V00
         )
 
-        # 3. V(1, 1)
-        V11_first_term = 2 * A - B + delta * (p11 * V11 + (1 - p11) * V10)
-        V11_frac_term = (
-            4 * A - 2 * B + 1 + delta * (p11 * S11_01 + (1 - p11) * S10_00)
-        ) / 2
-        V11_rhs = p11 * V11_first_term + (1 - p11) * V11_frac_term
+        V10_new = (
+            pi10
+            + (q01 * (1 + p01)) / 2
+            + delta
+            * (p10 * q01 * V11 + q01 * q10 * V10 + p01 * p10 * V01 + p01 * q10 * V00)
+        )
 
-        # 4. V(1, 0)
-        V10_first_term = 2 * A + delta * (p01 * V11 + (1 - p01) * V10)
-        V10_frac_term = (4 * A + 1 + delta * (p01 * S11_01 + (1 - p01) * S10_00)) / 2
-        V10_rhs = p10 * V10_first_term + (1 - p10) * V10_frac_term
+        V11_new = (
+            pi11
+            + (q11 * (1 + p11)) / 2
+            + delta * (p11 * q11 * V11 + q11**2 * V10 + p11**2 * V01 + p11 * q11 * V00)
+        )
 
-        # probability equations
-        # 5. p(0, 0)
-        p00_raw = delta * (p00 * D11_01 + (1 - p00) * D10_00) - C
-        p00_rhs = np.clip(p00_raw, 0, 1)
-
-        # 6. p(0, 1)
-        p01_raw = delta * (p01 * D11_01 + (1 - p01) * D10_00) - C
-        p01_rhs = np.clip(p01_raw, 0, 1)
-
-        # 7. p(1, 1)
-        p11_raw = delta * (p11 * D11_01 + (1 - p11) * D10_00)
-        p11_rhs = np.clip(p11_raw, 0, 1)
-
-        # 8. p(1, 0)
-        p10_raw = delta * (p10 * D11_01 + (1 - p10) * D10_00)
-        p10_rhs = np.clip(p10_raw, 0, 1)
+        # probability function updates
+        p00_new = -C + delta * (p00 * (V11 - V01) + q00 * (V10 - V00))
+        p10_new = -C + delta * (p01 * (V11 - V01) + q01 * (V10 - V00))
+        p01_new = delta * (p10 * (V11 - V01) + q10 * (V10 - V00))
+        p11_new = delta * (p11 * (V11 - V01) + q11 * (V10 - V00))
 
         # return the system of equations
         return np.array(
             [
-                V00 - V00_rhs,
-                V01 - V01_rhs,
-                V10 - V10_rhs,
-                V11 - V11_rhs,
-                p00 - p00_rhs,
-                p01 - p01_rhs,
-                p10 - p10_rhs,
-                p11 - p11_rhs,
+                V00 - V00_new,
+                V01 - V01_new,
+                V10 - V10_new,
+                V11 - V11_new,
+                p00 - p00_new,
+                p01 - p01_new,
+                p10 - p10_new,
+                p11 - p11_new,
             ]
         )
 
-    def val_enter_exit(self, psi, phi, my_state, other_state):
+    def _val_enter_exit(self, psi, phi, my_state, other_state):
         """
         Calculate the value of entering or exiting the market.
         """
@@ -165,11 +159,11 @@ class EntryExit:
         psi = self.psi_draw()
         phi = self.phi_draw()
 
-        val_enter, val_exit = self.val_enter_exit(psi, phi, my_state, other_state)
+        val_enter, val_exit = self._val_enter_exit(psi, phi, my_state, other_state)
         next_state = int(np.argmax([val_exit, val_enter]))
         return next_state, psi, phi
 
-    def simulate_data(self, num_periods=10):
+    def simulate_data(self, num_periods=1000):
         """
         Simulate data based on the solved system of equations.
         """
@@ -190,4 +184,113 @@ class EntryExit:
             psi_draws.append((psi1, psi2))
             phi_draws.append((phi1, phi2))
 
-        return np.array(states), np.array(psi_draws), np.array(phi_draws)
+        self.states = states
+        self.psi_draws = psi_draws
+        self.phi_draws = phi_draws
+
+    def _value_function(self, params, choice_probs):
+        """
+        Calculate the value function based on the parameters and choice probabilities.
+        """
+        A, B, C = params
+        p00, p01, p10, p11 = choice_probs
+
+    def _objective_function(self, params, probs_true):
+        """
+        Objective function to be minimized.
+        """
+        A, B, C = params
+
+        # Estimate value function and probabilities
+        sol = opt.root(
+            self._optimize_system_func,
+            np.ones(8),
+            method="hybr",
+            options={"xtol": 1e-8},
+            args=(
+                A,
+                B,
+                C,
+            ),
+        )
+        probs_est = sol.x[4:]
+        return probs_est - probs_true
+
+    def estimate_model(self):
+        """
+        Estimate the model parameters based on the simulated data.
+        """
+        if self.states is None:
+            self.simulate_data()
+
+        # Calculate probabilities
+        p00_list = []
+        p01_list = []
+        p10_list = []
+        p11_list = []
+        for i, state in enumerate(self.states):
+            if i == 0:
+                continue
+
+            last_state = self.states[i - 1]
+            if last_state == (0, 0):
+                if state[0] == 1:
+                    p00_list.append(1)
+                else:
+                    p00_list.append(0)
+
+                if state[1] == 1:
+                    p00_list.append(1)
+                else:
+                    p00_list.append(0)
+
+            elif last_state == (0, 1):
+                if state[0] == 1:
+                    p10_list.append(1)
+                else:
+                    p10_list.append(0)
+
+                if state[1] == 1:
+                    p01_list.append(1)
+                else:
+                    p01_list.append(0)
+
+            elif last_state == (1, 0):
+                if state[0] == 1:
+                    p01_list.append(1)
+                else:
+                    p01_list.append(0)
+
+                if state[1] == 1:
+                    p10_list.append(1)
+                else:
+                    p10_list.append(0)
+
+            elif last_state == (1, 1):
+                if state[0] == 1:
+                    p11_list.append(1)
+                else:
+                    p11_list.append(0)
+
+                if state[1] == 1:
+                    p11_list.append(1)
+                else:
+                    p11_list.append(0)
+
+        p00 = np.mean(p00_list)
+        p01 = np.mean(p01_list)
+        p10 = np.mean(p10_list)
+        p11 = np.mean(p11_list)
+        probs_true = np.array([p00, p01, p10, p11])
+
+        print("True probabilities:", probs_true.round(2))
+
+        initial_guess = np.array([1.0, 1.0, 1.0])
+        result = opt.least_squares(
+            lambda x: self._objective_function(x, probs_true),
+            x0=initial_guess,
+        )
+
+        A_hat, B_hat, C_hat = result.x
+
+        print(f"Fitted parameters: {A_hat:.2f}, {B_hat:.2f}, {C_hat:.2f}")

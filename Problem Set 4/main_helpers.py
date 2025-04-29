@@ -283,14 +283,18 @@ class EntryExit:
         p11 = np.mean(p11_list)
         probs_true = np.array([p00, p01, p10, p11])
 
-        print("True probabilities:", probs_true.round(2))
-
         initial_guess = np.array([1.0, 1.0, 1.0])
         result = opt.least_squares(
             lambda x: self._objective_function(x, probs_true),
             x0=initial_guess,
         )
 
-        A_hat, B_hat, C_hat = result.x
+        self.A_hat, self.B_hat, self.C_hat = result.x
 
-        print(f"Fitted parameters: {A_hat:.2f}, {B_hat:.2f}, {C_hat:.2f}")
+        if self.verbose:
+            print(
+                f"FitteTrued parameters: {self.params['A']:.2f}, {self.params['B']:.2f}, {self.params['C']:.2f}"
+            )
+            print(
+                f"Fitted parameters: {self.A_hat:.2f}, {self.B_hat:.2f}, {self.C_hat:.2f}"
+            )

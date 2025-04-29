@@ -19,7 +19,7 @@ EE = mh.EntryExit(PARAMS, verbose=True)
 EE.solve_system()
 
 # %% Generate data
-EE.simulate_data()
+EE.simulate_data(num_periods=1_000)
 
 # %% Solve for parameters
 EE.estimate_model()

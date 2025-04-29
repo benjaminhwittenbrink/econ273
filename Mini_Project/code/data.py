@@ -161,6 +161,56 @@ class DiamondData:
         self.rent = rent_eq
         self.amenity_endog = amenity_endog_eq
 
+    # def _simulate_endog(self):
+    #     """
+    #     Simulate endogenous variables: wages, labor supplies, prices, amenity levels.
+    #     Where j is the city and t is the time period.
+    #     """
+
+    #     # Iterate to find fixed point
+    #     init = np.ones(self.params["J"])
+    #     self._run_price_fixed_point(init)
+
+    def _run_price_fixed_point(self, init, tol=1e-10, max_iter=10000):
+        """
+        Get equilibrium prices and shares.
+        """
+        wage_L, wage_H, rent, amenity_endog = init, init, init, init
+
+        for i in range(max_iter):
+            L, H, wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
+                self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
+            )
+            # If everything has converged, break
+            if (
+                self._convergence_check(wage_H, wage_H_new, tol)
+                and self._convergence_check(wage_L, wage_L_new, tol)
+                and self._convergence_check(rent, rent_new, tol)
+                and self._convergence_check(amenity_endog, amenity_endog_new, tol)
+            ):
+                if self.verbose:
+                    logger.info(f"Fixed point converged in {i} iterations.")
+                break
+
+            # Update
+            wage_H, wage_L, rent, amenity_endog = (
+                wage_H_new,
+                wage_L_new,
+                rent_new,
+                amenity_endog_new,
+            )
+
+        if i == max_iter - 1:
+            print("Price fixed point did not converge.")
+
+        self.population = H + L
+        self.H = H
+        self.L = L
+        self.wage_H = wage_H
+        self.wage_L = wage_L
+        self.rent = rent
+        self.amenity_endog = amenity_endog
+
     def _solve_prices(self, init):
         """
         Get equilibrium prices and shares.
@@ -200,7 +250,7 @@ class DiamondData:
             + self.epsilon_L
         )
 
-        rent = self._rent_fixed_point(H, L, wage_H, wage_L)
+        rent = self._solve_rents(H, L, wage_H, wage_L)
 
         # Update amenities given population
         amenity_endog = self.params["phi_a"] * np.log(H / L) + self.epsilon_a
@@ -237,14 +287,15 @@ class DiamondData:
             delta.append(d_z)
         return np.array(delta)
 
-    def _rent_fixed_point(self, H, L, wage_H, wage_L, tol=1e-7):
+    def _solve_rents(self, H, L, wage_H, wage_L, tol=1e-7):
         """
         Find the fixed point for rent given the population and wages.
         """
+        J = self.params["J"]
+        x0 = np.concatenate([np.ones(J), np.ones(J)])
 
-        def equations(x):
-            r = x[: self.params["J"]]
-            HD = x[self.params["J"] :]
+        def rent_residuals(x):
+            r, HD = x[:J], x[J:]
             eq1 = r - (
                 np.log(self.params["iota"])
                 + np.log(self.construction_costs)
@@ -256,14 +307,11 @@ class DiamondData:
             )
             return np.concatenate([eq1, eq2])
 
-        # Solve the system using fsolve
-        initial_guess = np.concatenate(
-            [np.ones(self.params["J"]), np.ones(self.params["J"])]
-        )
-        solution = fsolve(equations, initial_guess)
+        sol = least_squares(rent_residuals, x0, xtol=tol, ftol=tol, gtol=tol)
+        if not sol.success:
+            logger.warning("Rent fixed point did not converge.")
 
-        rent = solution[: self.params["J"]]
-        HD = solution[self.params["J"] :]
+        rent = sol.x[:J]
         return rent
 
     def _convergence_check(self, x, x_new, tol):

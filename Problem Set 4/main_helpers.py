@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import optimize as opt
+from scipy.optimize import minimize
 
 
 class EntryExit:
@@ -43,7 +44,7 @@ class EntryExit:
         Solve the system of equations using a root-finding algorithm.
         """
         if initial_guess is None:
-            initial_guess = np.ones(8)
+            initial_guess = np.array([0.1, 0.2, 0.3, 0.4, 0.1, 0.2, 0.3, 0.4])
 
         sol = opt.root(
             self._optimize_system_func,
@@ -86,24 +87,23 @@ class EntryExit:
         #### Construct the system of equations
         # value‐function updates
         V00_new = -p00 * (C + p00 / 2) + delta * (
-            p00**2 * V11 + p00 * q00 * V10 + p00 * q00 * V01 + q00**2 * V00
+            p00 * (p00 * V11 + q00 * V10) + q00 * (p00 * V01 + q00 * V00)
         )
 
-        V01_new = -p01 * (C + p01 / 2) + delta * (
-            p10 * p01 * V11 + p10 * q01 * V10 + p01 * q10 * V01 + q01 * q10 * V00
+        V01_new = -p10 * (C + p10 / 2) + delta * (
+            p10 * (p01 * V11 + q01 * V10) + q10 * (p01 * V01 + q01 * V00)
         )
 
         V10_new = (
             pi10
             + (q01 * (1 + p01)) / 2
-            + delta
-            * (p10 * q01 * V11 + q01 * q10 * V10 + p01 * p10 * V01 + p01 * q10 * V00)
+            + delta * (p01 * (p10 * V11 + q10 * V10) + q01 * (p10 * V01 + q10 * V00))
         )
 
         V11_new = (
             pi11
             + (q11 * (1 + p11)) / 2
-            + delta * (p11 * q11 * V11 + q11**2 * V10 + p11**2 * V01 + p11 * q11 * V00)
+            + delta * (p11 * (p11 * V11 + q11 * V10) + q11 * (p11 * V01 + q11 * V00))
         )
 
         # probability function updates
@@ -112,8 +112,12 @@ class EntryExit:
         p01_new = delta * (p10 * (V11 - V01) + q10 * (V10 - V00))
         p11_new = delta * (p11 * (V11 - V01) + q11 * (V10 - V00))
 
-        # return the system of equations
-        return np.array(
+        # p00_new = np.clip(p00_new, 0, 1)
+        # p01_new = np.clip(p01_new, 0, 1)
+        # p10_new = np.clip(p10_new, 0, 1)
+        # p11_new = np.clip(p11_new, 0, 1)
+
+        res = np.array(
             [
                 V00 - V00_new,
                 V01 - V01_new,
@@ -125,6 +129,8 @@ class EntryExit:
                 p11 - p11_new,
             ]
         )
+
+        return res
 
     def _val_enter_exit(self, psi, phi, my_state, other_state):
         """
@@ -195,10 +201,7 @@ class EntryExit:
         A, B, C = params
         p00, p01, p10, p11 = choice_probs
 
-    def _objective_function(self, params, probs_true):
-        """
-        Objective function to be minimized.
-        """
+    def _estimate_probs(self, params):
         A, B, C = params
 
         # Estimate value function and probabilities
@@ -214,7 +217,16 @@ class EntryExit:
             ),
         )
         probs_est = sol.x[4:]
-        return probs_est - probs_true
+
+        return probs_est
+
+    def _objective_function(self, params, probs_true):
+        """
+        Objective function to be minimized.
+        """
+        probs_est = self._estimate_probs(params)
+        diff = probs_est - probs_true
+        return np.abs(diff)
 
     def estimate_model(self):
         """
@@ -281,19 +293,37 @@ class EntryExit:
         p01 = np.mean(p01_list)
         p10 = np.mean(p10_list)
         p11 = np.mean(p11_list)
-        probs_true = np.array([p00, p01, p10, p11])
-
-        initial_guess = np.array([1.0, 1.0, 1.0])
-        result = opt.least_squares(
-            lambda x: self._objective_function(x, probs_true),
-            x0=initial_guess,
+        probs_empirical = np.array([p00, p01, p10, p11])
+        probs_true = np.array(
+            [
+                self.results["p00"],
+                self.results["p01"],
+                self.results["p10"],
+                self.results["p11"],
+            ]
         )
+
+        initial_guess = np.array([0.5, 0.5, 0.5])
+
+        def loss(theta):
+            resid = self._objective_function(theta, probs_empirical)
+            l = np.dot(resid, resid)
+            return l
+
+        result = minimize(loss, x0=initial_guess, method="L-BFGS-B")
+
+        # if self.verbose:
+        #     print(f"True probabilities: ", probs_true.round(3))
+        #     print("Empirical probabilities: ", probs_empirical.round(3))
+
+        #     est_probs = self._estimate_probs(result.x)
+        #     print("Estimated probabilities: ", est_probs.round(3))
 
         self.A_hat, self.B_hat, self.C_hat = result.x
 
         if self.verbose:
             print(
-                f"FitteTrued parameters: {self.params['A']:.2f}, {self.params['B']:.2f}, {self.params['C']:.2f}"
+                f"True parameters: {self.params['A']:.2f}, {self.params['B']:.2f}, {self.params['C']:.2f}"
             )
             print(
                 f"Fitted parameters: {self.A_hat:.2f}, {self.B_hat:.2f}, {self.C_hat:.2f}"

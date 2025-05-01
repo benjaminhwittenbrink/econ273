@@ -85,7 +85,7 @@ class EntryExit:
 
         #### Construct the system of equations
         # value‐function updates
-        V00_new = -p00 * (C - p00 / 2) + delta * (
+        V00_new = -p00 * (C + p00 / 2) + delta * (
             p00**2 * V11 + p00 * q00 * V10 + p00 * q00 * V01 + q00**2 * V00
         )
 

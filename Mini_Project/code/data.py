@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import logging
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, least_squares
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,21 @@ class DiamondData:
         logger.info(f"Amenities: {self.amenity_endog}")
         logger.info(f"High Ed population: {self.H}")
         logger.info(f"Low Ed population: {self.L}")
+
+    def to_dataframe(self):
+        """
+        Convert the simulation results to a pandas DataFrame.
+        """
+        data = {
+            "Population": self.population,
+            "Wage_H": self.wage_H,
+            "Wage_L": self.wage_L,
+            "Rent": self.rent,
+            "Amenity_Endog": self.amenity_endog,
+            "High_Ed_Population": self.H,
+            "Low_Ed_Population": self.L,
+        }
+        return pd.DataFrame(data)
 
     ### Subclass for each demographic group
     class Demographic:
@@ -92,11 +107,11 @@ class DiamondData:
         self.low_ed = self.Demographic(self.params, edu_level="L")
 
         ###### Amenities ######
-        self.endog_amenity = np.random.lognormal(
+        self.amenity_endog = np.random.lognormal(
             self.params["a"]["mu"], self.params["a"]["sigma"], self.params["J"]
         )
 
-        self.exog_amenity = np.random.lognormal(
+        self.amenity_exog = np.random.lognormal(
             self.params["x"]["mu"], self.params["x"]["sigma"], self.params["J"]
         )
 
@@ -123,9 +138,38 @@ class DiamondData:
         Where j is the city and t is the time period.
         """
 
-        # Iterate to find fixed point
-        init = np.ones(self.params["J"])
-        self._run_price_fixed_point(init)
+        # initialize guess for wages, rents, and amenities
+        init = np.concatenate([np.ones(self.params["J"])] * 4)
+        sol = least_squares(
+            self._solve_prices,
+            init,
+            xtol=1e-10,
+            ftol=1e-10,
+            gtol=1e-10,
+        )
+
+        if not sol.success:
+            logger.warning("Fixed point did not converge.")
+
+        wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq = np.split(sol.x, 4)
+        L_eq, H_eq, _, _, _, _ = self._find_equilibrium(
+            wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq
+        )
+        self.L, self.H = L_eq, H_eq
+        self.population = L_eq + H_eq
+        self.wage_L, self.wage_H = wage_L_eq, wage_H_eq
+        self.rent = rent_eq
+        self.amenity_endog = amenity_endog_eq
+
+    # def _simulate_endog(self):
+    #     """
+    #     Simulate endogenous variables: wages, labor supplies, prices, amenity levels.
+    #     Where j is the city and t is the time period.
+    #     """
+
+    #     # Iterate to find fixed point
+    #     init = np.ones(self.params["J"])
+    #     self._run_price_fixed_point(init)
 
     def _run_price_fixed_point(self, init, tol=1e-10, max_iter=10000):
         """
@@ -167,6 +211,23 @@ class DiamondData:
         self.rent = rent
         self.amenity_endog = amenity_endog
 
+    def _solve_prices(self, init):
+        """
+        Get equilibrium prices and shares.
+        """
+        wage_L, wage_H, rent, amenity_endog = np.split(init, 4)
+        _, _, wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
+            self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
+        )
+        return np.concatenate(
+            [
+                wage_L_new - wage_L,
+                wage_H_new - wage_H,
+                rent_new - rent,
+                amenity_endog_new - amenity_endog,
+            ]
+        )
+
     def _find_equilibrium(self, wage_L, wage_H, rent, amenity_endog):
         """
         For a given set of prices/amenities, find the equilibrium population.
@@ -189,7 +250,7 @@ class DiamondData:
             + self.epsilon_L
         )
 
-        rent = self._rent_fixed_point(H, L, wage_H, wage_L)
+        rent = self._solve_rents(H, L, wage_H, wage_L)
 
         # Update amenities given population
         amenity_endog = self.params["phi_a"] * np.log(H / L) + self.epsilon_a
@@ -220,20 +281,21 @@ class DiamondData:
         for race in [0, 1]:
             d_z = (
                 (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
-                + self.endog_amenity * self.params["beta_a"][race]
-                + self.exog_amenity * self.params["beta_x"][race]
+                + self.amenity_endog * self.params["beta_a"][race]
+                + self.amenity_exog * self.params["beta_x"][race]
             )
             delta.append(d_z)
         return np.array(delta)
 
-    def _rent_fixed_point(self, H, L, wage_H, wage_L, tol=1e-7, max_iter=1000):
+    def _solve_rents(self, H, L, wage_H, wage_L, tol=1e-7):
         """
         Find the fixed point for rent given the population and wages.
         """
+        J = self.params["J"]
+        x0 = np.concatenate([np.ones(J), np.ones(J)])
 
-        def equations(x):
-            r = x[: self.params["J"]]
-            HD = x[self.params["J"] :]
+        def rent_residuals(x):
+            r, HD = x[:J], x[J:]
             eq1 = r - (
                 np.log(self.params["iota"])
                 + np.log(self.construction_costs)
@@ -245,14 +307,11 @@ class DiamondData:
             )
             return np.concatenate([eq1, eq2])
 
-        # Solve the system using fsolve
-        initial_guess = np.concatenate(
-            [np.ones(self.params["J"]), np.ones(self.params["J"])]
-        )
-        solution = fsolve(equations, initial_guess)
+        sol = least_squares(rent_residuals, x0, xtol=tol, ftol=tol, gtol=tol)
+        if not sol.success:
+            logger.warning("Rent fixed point did not converge.")
 
-        rent = solution[: self.params["J"]]
-        HD = solution[self.params["J"] :]
+        rent = sol.x[:J]
         return rent
 
     def _convergence_check(self, x, x_new, tol):

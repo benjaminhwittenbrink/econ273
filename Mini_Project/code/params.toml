@@ -1,5 +1,5 @@
 ####### Parameters 
-J = 5
+J = 10
 
 # Production function
 gamma_HH = -0.2

@@ -11,8 +11,8 @@ class EntryExit:
         np.random.seed(seed)
 
         self.states = None
-
         self._result_order = ["V00", "V01", "V10", "V11", "p00", "p01", "p10", "p11"]
+        self.ALL_STATES = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     def set_params(self, params):
         self.params = params
@@ -136,7 +136,6 @@ class EntryExit:
         """
         Calculate the value of entering or exiting the market.
         """
-
         # Probability that the other player enters, given the current state
         p = self.results[f"p{my_state}{other_state}"]
 
@@ -162,6 +161,9 @@ class EntryExit:
         return val_enter, val_exit
 
     def _choose_next_state(self, my_state, other_state):
+        """
+        Choose the next state based on the current state and the value of entering or exiting.
+        """
         psi = self.psi_draw()
         phi = self.phi_draw()
 
@@ -171,9 +173,8 @@ class EntryExit:
 
     def simulate_data(self, num_periods=1000):
         """
-        Simulate data based on the solved system of equations.
+        Simulate data for the model.
         """
-
         states = []  # Initialize at (0,0)
         psi_draws = []
         phi_draws = []
@@ -194,137 +195,165 @@ class EntryExit:
         self.psi_draws = psi_draws
         self.phi_draws = phi_draws
 
-    def _value_function(self, params, choice_probs):
+    def _empirical_probs_and_counts(self):
         """
-        Calculate the value function based on the parameters and choice probabilities.
+        Calculate empirical probabilities and counts for each state based on simulated data.
         """
-        A, B, C = params
-        p00, p01, p10, p11 = choice_probs
+        counts = {s: [0, 0] for s in self.ALL_STATES}  # [den, num]
 
-    def _estimate_probs(self, params):
-        A, B, C = params
+        for t in range(1, len(self.states)):
+            prev = self.states[t - 1]  #  s_{t-1}
+            curr = self.states[t]  #  s_t   (actions = next state)
 
-        # Estimate value function and probabilities
+            # “success” for firm 2 ⇔ curr second component == 1
+            success2 = curr[1]
+            # success for firm 1  ⇔ curr first component  == 1
+            success1 = curr[0]
+
+            if prev == (0, 0):
+                counts[(0, 0)][0] += 2
+                counts[(0, 0)][1] += success1 + success2
+            elif prev == (0, 1):
+                counts[(1, 0)][0] += 1
+                counts[(1, 0)][1] += success1  # firm 1 moves
+                counts[(0, 1)][0] += 1
+                counts[(0, 1)][1] += success2  # firm 2 moves
+            elif prev == (1, 0):
+                counts[(0, 1)][0] += 1
+                counts[(0, 1)][1] += success1
+                counts[(1, 0)][0] += 1
+                counts[(1, 0)][1] += success2
+            elif prev == (1, 1):
+                counts[(1, 1)][0] += 2
+                counts[(1, 1)][1] += success1 + success2
+
+        p_hat = {s: counts[s][1] / counts[s][0] for s in self.ALL_STATES}
+        return p_hat, counts
+
+    def _solve_equilibrium(self, theta):
+        """
+        Solve the equilibrium for the given parameters.
+        """
+        A, B, C = theta
         sol = opt.root(
             self._optimize_system_func,
             np.ones(8),
             method="hybr",
             options={"xtol": 1e-8},
-            args=(
-                A,
-                B,
-                C,
-            ),
+            args=(A, B, C),
         )
-        probs_est = sol.x[4:]
+        if not sol.success:
+            raise RuntimeError(sol.message)
+        V00, V01, V10, V11, p00, p01, p10, p11 = sol.x
+        p = {(0, 0): p00, (0, 1): p01, (1, 0): p10, (1, 1): p11}
+        V = {(0, 0): V00, (0, 1): V01, (1, 0): V10, (1, 1): V11}
+        return p, V
 
-        return probs_est
+    def _moment_vector(self, theta, p_hat):
+        """
+        Calculate the moment vector for the GMM estimation.
+        """
+        p_sim, _ = self._solve_equilibrium(theta)
+        return np.array([p_hat[s] - p_sim[s] for s in self.ALL_STATES])
 
-    def _objective_function(self, params, probs_true):
+    def _numerical_jacobian(self, theta, p_hat, eps=1e-6):
         """
-        Objective function to be minimized.
+        Calculate the numerical Jacobian of the moment vector.
         """
-        probs_est = self._estimate_probs(params)
-        diff = probs_est - probs_true
-        return np.abs(diff)
+        g0 = self._moment_vector(theta, p_hat)
+        jac = np.zeros((len(g0), len(theta)))
+        for j in range(len(theta)):
+            step = np.zeros_like(theta, float)
+            step[j] = eps
+            jac[:, j] = (
+                self._moment_vector(theta + step, p_hat)
+                - self._moment_vector(theta - step, p_hat)
+            ) / (2.0 * eps)
+        return jac
+
+    def _build_sigma(self, counts, p_hat):
+        """
+        Build the variance-covariance matrix for the GMM estimation.
+        """
+        Sigma = np.zeros((4, 4))
+        for i, s in enumerate(self.ALL_STATES):
+            n = counts[s][0]
+            Sigma[i, i] = p_hat[s] * (1.0 - p_hat[s]) / n if n > 0 else 1e-8
+        return Sigma
+
+    def _efficient_weight_matrix(self, counts, p_hat):
+        """
+        Build the efficient weight matrix for the GMM estimation.
+        """
+        Sigma = self._build_sigma(counts, p_hat)
+        # Since there are no g parameters, weighting matrix simplifies to:
+        return 0.25 * np.linalg.inv(Sigma)
+
+    def _gmm_variance_efficient(self, theta_hat, p_hat, counts):
+        """
+        Calculate the GMM variance-covariance matrix and standard errors.
+        """
+        D_theta = self._numerical_jacobian(theta_hat, p_hat)
+        W_star = self._efficient_weight_matrix(counts, p_hat)
+        vcov = np.linalg.inv(D_theta.T @ W_star @ D_theta)
+        se = np.sqrt(np.diag(vcov))
+        return vcov, se
+
+    def _loss_function(self, theta, p_hat, W=np.eye(4)):
+        """
+        Calculate the loss function for the GMM estimation.
+        """
+        resid = self._moment_vector(theta, p_hat)
+        return resid.T @ W @ resid
+
+    def _asymptotic_least_squares_estimator(self):
+        """
+        Asymptotic least squares estimator for the model based on Pesendorder Schmidt-Dengler (2008).
+        """
+        p_hat, counts = self._empirical_probs_and_counts()
+
+        # step‑1 Pesendorfer Schmidt‑Dengler least squares estimator
+        res_step1 = minimize(
+            lambda th: self._loss_function(th, p_hat),
+            x0=np.array([0.6, 0.5, 0.2]),
+            method="L-BFGS-B",
+            bounds=((1e-4, 0.999),) * 3,
+        )
+        if not res_step1.success:
+            raise RuntimeError(res_step1.message)
+
+        # step-2 Pesendorfer Schmidt‑Dengler least squares estimator (with optimal weight matrix)
+        weight_matrix = self._efficient_weight_matrix(counts, p_hat)
+        res_step2 = minimize(
+            lambda th: self._loss_function(th, p_hat, W=weight_matrix),
+            x0=res_step1.x,
+            method="L-BFGS-B",
+            bounds=((1e-4, 0.999),) * 3,
+        )
+        if not res_step2.success:
+            raise RuntimeError(res_step2.message)
+
+        self.A_hat, self.B_hat, self.C_hat = theta_hat = res_step2.x
+
+        # step‑3 PSD‑GMM standard errors
+        self.vcov, self.se = self._gmm_variance_efficient(theta_hat, p_hat, counts)
 
     def estimate_model(self):
         """
-        Estimate the model parameters based on the simulated data.
+        Estimate the model parameters using GMM.
         """
         if self.states is None:
             self.simulate_data()
 
-        # Calculate probabilities
-        p00_list = []
-        p01_list = []
-        p10_list = []
-        p11_list = []
-        for i, state in enumerate(self.states):
-            if i == 0:
-                continue
-
-            last_state = self.states[i - 1]
-            if last_state == (0, 0):
-                if state[0] == 1:
-                    p00_list.append(1)
-                else:
-                    p00_list.append(0)
-
-                if state[1] == 1:
-                    p00_list.append(1)
-                else:
-                    p00_list.append(0)
-
-            elif last_state == (0, 1):
-                if state[0] == 1:
-                    p10_list.append(1)
-                else:
-                    p10_list.append(0)
-
-                if state[1] == 1:
-                    p01_list.append(1)
-                else:
-                    p01_list.append(0)
-
-            elif last_state == (1, 0):
-                if state[0] == 1:
-                    p01_list.append(1)
-                else:
-                    p01_list.append(0)
-
-                if state[1] == 1:
-                    p10_list.append(1)
-                else:
-                    p10_list.append(0)
-
-            elif last_state == (1, 1):
-                if state[0] == 1:
-                    p11_list.append(1)
-                else:
-                    p11_list.append(0)
-
-                if state[1] == 1:
-                    p11_list.append(1)
-                else:
-                    p11_list.append(0)
-
-        p00 = np.mean(p00_list)
-        p01 = np.mean(p01_list)
-        p10 = np.mean(p10_list)
-        p11 = np.mean(p11_list)
-        probs_empirical = np.array([p00, p01, p10, p11])
-        probs_true = np.array(
-            [
-                self.results["p00"],
-                self.results["p01"],
-                self.results["p10"],
-                self.results["p11"],
-            ]
-        )
-
-        initial_guess = np.array([0.5, 0.5, 0.5])
-
-        def loss(theta):
-            resid = self._objective_function(theta, probs_empirical)
-            l = np.dot(resid, resid)
-            return l
-
-        result = minimize(loss, x0=initial_guess, method="L-BFGS-B")
-
-        # if self.verbose:
-        #     print(f"True probabilities: ", probs_true.round(3))
-        #     print("Empirical probabilities: ", probs_empirical.round(3))
-
-        #     est_probs = self._estimate_probs(result.x)
-        #     print("Estimated probabilities: ", est_probs.round(3))
-
-        self.A_hat, self.B_hat, self.C_hat = result.x
+        self._asymptotic_least_squares_estimator()
 
         if self.verbose:
             print(
-                f"True parameters: {self.params['A']:.2f}, {self.params['B']:.2f}, {self.params['C']:.2f}"
+                f"\nTrue (A,B,C) : {self.params['A']:.3f}, "
+                f"{self.params['B']:.3f}, {self.params['C']:.3f}"
             )
             print(
-                f"Fitted parameters: {self.A_hat:.2f}, {self.B_hat:.2f}, {self.C_hat:.2f}"
+                f" Est. (A,B,C): {self.A_hat:.3f}, "
+                f"{self.B_hat:.3f}, {self.C_hat:.3f}"
             )
+            print(" s.e.        :", "  ".join(f"{x:.3f}" for x in self.se))

@@ -1,11 +1,17 @@
 ####### Parameters 
-J = 10
+J = 100
 
 # Production function
 gamma_HH = -0.2
 gamma_HL = 0.5
 gamma_LL = -0.5
 gamma_LH = 0.7
+
+# Housing demand instrument coefficients
+alpha_HH = 0.8
+alpha_HL = 0.1
+alpha_LH = 0.2
+alpha_LL = 0.7
 
 # Housing supply 
 iota = 0.05
@@ -35,6 +41,15 @@ p_black = 0.9
 p_state = 0.8
 
 ###### Observables
+# Housing Demand Instruments
+[Z_H]
+mu = 0 
+sigma = 1
+
+[Z_L]
+mu = 0
+sigma = 1
+
 # Housing supply 
 [x_geo]
 mu = 0 

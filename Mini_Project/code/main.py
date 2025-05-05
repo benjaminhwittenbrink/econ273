@@ -4,6 +4,7 @@ import os
 import logging
 import toml
 from importlib import reload
+import pickle
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,11 +22,12 @@ reload(data)
 with open("params.toml", "r") as file:
     params = toml.load(file)
 
+
 def convert_to_latex_macros(dictionary, prefix=""):
     macros = []
     for key, value in dictionary.items():
         latex_key = f"{prefix}{key}"
-        latex_key =  "params" + latex_key.replace("_","")
+        latex_key = "params" + latex_key.replace("_", "")
         if isinstance(value, dict):  # Handle nested sections
             macros.extend(convert_to_latex_macros(value, prefix=f"{latex_key}_"))
         elif isinstance(value, list):  # Handle lists
@@ -34,6 +36,7 @@ def convert_to_latex_macros(dictionary, prefix=""):
         else:  # Handle scalar values
             macros.append(f"\\newcommand{{\\{latex_key}}}{{{value}}}")
     return macros
+
 
 # Generate LaTeX macros
 latex_macros = convert_to_latex_macros(params)
@@ -52,4 +55,11 @@ DD = data.DiamondData(params)
 DD.simulate()
 # %%
 DD.print_results()
+# %%
+res = DD.to_dataframe()
+# %%
+res.to_csv("../data/simulated_data_05_05.csv", index=False)
+# %%
+with open("../data/simulated_data_05_05.pkl", "wb") as f:
+    pickle.dump(res, f)
 # %%

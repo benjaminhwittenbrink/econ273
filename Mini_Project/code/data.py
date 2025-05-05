@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import logging
+import pickle
+import os
 from scipy.optimize import fsolve, least_squares
 from tqdm import tqdm
 
@@ -21,18 +23,19 @@ class DiamondData:
             if isinstance(params[key], list):
                 params[key] = np.array(params[key])
 
-    def print_results(self):
+    def write(self, file_dir, filename):
         """
-        Print the results of the simulation.
+        Write the class to a pickle file.
+        Write the data to a CSV file.
         """
-        logger.info("Simulation Results:")
-        logger.info(f"Population: {self.population}")
-        logger.info(f"Wages (High Ed): {self.wage_H}")
-        logger.info(f"Wages (Low Ed): {self.wage_L}")
-        logger.info(f"Rent: {self.rent}")
-        logger.info(f"Amenities: {self.amenity_endog}")
-        logger.info(f"High Ed population: {self.H}")
-        logger.info(f"Low Ed population: {self.L}")
+        dir = "../data" + file_dir
+        if not os.path.isdir(dir):
+            os.makedirs(dir)
+        with open(dir + filename + ".pkl", "wb") as f:
+            pickle.dump(self, f)
+        df = self.to_dataframe()
+        df.to_csv(dir + filename + ".csv", index=False)
+        logger.info(f"Saved {self.__class__.__name__} to {dir + filename}")
 
     def to_dataframe(self):
         """
@@ -46,6 +49,10 @@ class DiamondData:
             "Amenity_Endog": self.amenity_endog,
             "High_Ed_Population": self.H,
             "Low_Ed_Population": self.L,
+            "Regulatory_Constraint": self.x_reg,
+            "Geographic_Constraint": self.x_geo,
+            "Z_H": self.Z_H,
+            "Z_L": self.Z_L,
         }
         return pd.DataFrame(data)
 
@@ -100,6 +107,14 @@ class DiamondData:
             self.params["phi"]
             + self.params["phi_geo"] * self.x_geo
             + self.params["phi_reg"] * self.x_reg
+        )
+
+        ###### Demand Instrument Variables ######
+        self.Z_H = np.random.lognormal(
+            self.params["Z_H"]["mu"], self.params["Z_H"]["sigma"], self.params["J"]
+        )
+        self.Z_L = np.random.lognormal(
+            self.params["Z_L"]["mu"], self.params["Z_L"]["sigma"], self.params["J"]
         )
 
         ###### Population Demographics ######
@@ -241,12 +256,16 @@ class DiamondData:
         wage_H = (
             self.params["gamma_HH"] * np.log(H)
             + self.params["gamma_HL"] * np.log(L)
+            + self.params["alpha_HH"] * np.log(self.Z_H)
+            + self.params["alpha_HL"] * np.log(self.Z_L)
             + self.epsilon_H
         )
 
         wage_L = (
             self.params["gamma_LH"] * np.log(H)
             + self.params["gamma_LL"] * np.log(L)
+            + self.params["alpha_LH"] * np.log(self.Z_H)
+            + self.params["alpha_LL"] * np.log(self.Z_L)
             + self.epsilon_L
         )
 

@@ -13,8 +13,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-logging.info("Logger is configured and working.")
-
 # %%
 reload(data)
 
@@ -51,15 +49,13 @@ with open("../variables.tex", "w") as f:
             f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
 
 print("variables.tex has been generated!")
-DD = data.DiamondData(params)
-DD.simulate()
 # %%
-DD.print_results()
+default_seed = 273
+N_iters = 5
 # %%
-res = DD.to_dataframe()
-# %%
-res.to_csv("../data/simulated_data_05_05.csv", index=False)
-# %%
-with open("../data/simulated_data_05_05.pkl", "wb") as f:
-    pickle.dump(res, f)
+for s in [default_seed + i for i in range(N_iters)]:
+    logging.info(f"Simulating with seed {s}.")
+    DD = data.DiamondData(params, seed=s)
+    DD.simulate()
+    DD.write()
 # %%

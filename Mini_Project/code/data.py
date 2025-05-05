@@ -25,7 +25,7 @@ class DiamondData:
                 params[key] = np.array(params[key])
 
     ### I/O Methods
-    def write(self, filename, file_dir=None):
+    def write(self, file_dir=None):
         """
         Write the class and data to a folder.
         Folders will be of the form ../data/DiamondData_<seed>_<datetime>
@@ -37,11 +37,11 @@ class DiamondData:
         dir = "../data" + file_dir + seed_str + date_str + "/"
         if not os.path.isdir(dir):
             os.makedirs(dir)
-        with open(dir + filename + ".pkl", "wb") as f:
+        with open(dir + "DiamondData.pkl", "wb") as f:
             pickle.dump(self, f)
         df = self.to_dataframe()
-        df.to_csv(dir + filename + ".csv", index=False)
-        logger.info(f"Saved {self.__class__.__name__} to {dir + filename}")
+        df.to_csv(dir + "DiamondData.csv", index=False)
+        logger.info(f"Saved {self.__class__.__name__} to {dir}")
 
     def to_dataframe(self):
         """

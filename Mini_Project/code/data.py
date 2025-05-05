@@ -1,8 +1,9 @@
-import numpy as np
-import pandas as pd
+import os
 import logging
 import pickle
-import os
+import numpy as np
+import pandas as pd
+import datetime as dt
 from scipy.optimize import fsolve, least_squares
 from tqdm import tqdm
 
@@ -23,12 +24,17 @@ class DiamondData:
             if isinstance(params[key], list):
                 params[key] = np.array(params[key])
 
-    def write(self, file_dir, filename):
+    ### I/O Methods
+    def write(self, filename, file_dir=None):
         """
-        Write the class to a pickle file.
-        Write the data to a CSV file.
+        Write the class and data to a folder.
+        Folders will be of the form ../data/DiamondData_<seed>_<datetime>
         """
-        dir = "../data" + file_dir
+        if file_dir is None:
+            file_dir = "/DiamondData"
+        seed_str = "_" + str(self.seed)
+        date_str = "_" + dt.datetime.now().strftime("%Y_%m_%d_%s")
+        dir = "../data" + file_dir + seed_str + date_str + "/"
         if not os.path.isdir(dir):
             os.makedirs(dir)
         with open(dir + filename + ".pkl", "wb") as f:

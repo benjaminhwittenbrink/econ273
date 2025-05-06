@@ -1,5 +1,6 @@
 ####### Parameters 
 J = 50
+NUM_STATES = 10
 
 # Production function
 gamma_HH = -0.2
@@ -33,12 +34,10 @@ zeta = 0.8
 [H]
 N = 100
 p_black = 0.2
-p_state = 0.1
 
 [L]
 N = 200
 p_black = 0.9
-p_state = 0.8
 
 ###### Observables
 # Housing Demand Instruments

@@ -5,8 +5,6 @@ from scipy.optimize import minimize
 from tqdm import tqdm
 from typing import List, Dict, Tuple, Any
 
-import utils
-
 from data import DiamondData
 
 logger = logging.getLogger(__name__)

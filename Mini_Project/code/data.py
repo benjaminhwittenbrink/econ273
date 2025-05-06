@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import datetime as dt
-from scipy.optimize import fsolve, least_squares
+from scipy.optimize import least_squares
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -62,31 +62,12 @@ class DiamondData:
         }
         return pd.DataFrame(data)
 
-    ### Subclass for each demographic group
-    class Demographic:
-        def __init__(self, params, edu_level="H"):
-            self.params = params
-            self.edu_level = edu_level
-            self._initialize_params()
-
-        def _initialize_params(self):
-            # Number of individuals
-            self.N = self.params[self.edu_level]["N"]
-
-            # Set race based on probability of being black
-            self.race = np.random.binomial(
-                1, self.params[self.edu_level]["p_black"], self.N
-            )
-
-            # Set probability of being from that state
-            self.same_state = np.random.binomial(
-                1, self.params[self.edu_level]["p_state"], (self.N, self.params["J"])
-            )
-
     ### Public Methods
     def simulate(self):
+        logger.info("Starting simulation...")
         self._simulate_exog()
         self._simulate_endog()
+        logger.info("Simulation completed.")
 
     ### Private Methods
     def _simulate_exog(self):
@@ -124,8 +105,8 @@ class DiamondData:
         )
 
         ###### Population Demographics ######
-        self.high_ed = self.Demographic(self.params, edu_level="H")
-        self.low_ed = self.Demographic(self.params, edu_level="L")
+        self.high_ed = Demographic(self.params, edu_level="H")
+        self.low_ed = Demographic(self.params, edu_level="L")
 
         ###### Amenities ######
         self.amenity_endog = np.random.lognormal(
@@ -164,6 +145,8 @@ class DiamondData:
         sol = least_squares(
             self._solve_prices,
             init,
+            x_scale="jac",
+            bounds=(1e-8, np.inf),
             xtol=1e-10,
             ftol=1e-10,
             gtol=1e-10,
@@ -181,56 +164,6 @@ class DiamondData:
         self.wage_L, self.wage_H = wage_L_eq, wage_H_eq
         self.rent = rent_eq
         self.amenity_endog = amenity_endog_eq
-
-    # def _simulate_endog(self):
-    #     """
-    #     Simulate endogenous variables: wages, labor supplies, prices, amenity levels.
-    #     Where j is the city and t is the time period.
-    #     """
-
-    #     # Iterate to find fixed point
-    #     init = np.ones(self.params["J"])
-    #     self._run_price_fixed_point(init)
-
-    def _run_price_fixed_point(self, init, tol=1e-10, max_iter=10000):
-        """
-        Get equilibrium prices and shares.
-        """
-        wage_L, wage_H, rent, amenity_endog = init, init, init, init
-
-        for i in range(max_iter):
-            L, H, wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
-                self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
-            )
-            # If everything has converged, break
-            if (
-                self._convergence_check(wage_H, wage_H_new, tol)
-                and self._convergence_check(wage_L, wage_L_new, tol)
-                and self._convergence_check(rent, rent_new, tol)
-                and self._convergence_check(amenity_endog, amenity_endog_new, tol)
-            ):
-                if self.verbose:
-                    logger.info(f"Fixed point converged in {i} iterations.")
-                break
-
-            # Update
-            wage_H, wage_L, rent, amenity_endog = (
-                wage_H_new,
-                wage_L_new,
-                rent_new,
-                amenity_endog_new,
-            )
-
-        if i == max_iter - 1:
-            print("Price fixed point did not converge.")
-
-        self.population = H + L
-        self.H = H
-        self.L = L
-        self.wage_H = wage_H
-        self.wage_L = wage_L
-        self.rent = rent
-        self.amenity_endog = amenity_endog
 
     def _solve_prices(self, init):
         """
@@ -255,8 +188,8 @@ class DiamondData:
         Then, find the prices that those populations would imply.
         """
         # Get probability of being in each city for each type
-        H = self._calculate_population(self.high_ed, wage_H, rent)
-        L = self._calculate_population(self.low_ed, wage_L, rent)
+        H = self._calculate_population(self.high_ed, wage_H, rent, amenity_endog)
+        L = self._calculate_population(self.low_ed, wage_L, rent, amenity_endog)
 
         # Update prices given population
         wage_H = (
@@ -282,11 +215,11 @@ class DiamondData:
 
         return L, H, wage_L, wage_H, rent, amenity_endog
 
-    def _calculate_population(self, demographic, wage, rent):
+    def _calculate_population(self, demographic, wage, rent, amenity_endog):
         """
         Calculate population for each city given demographic.
         """
-        delta = self._get_delta(wage, rent)
+        delta = self._get_delta(wage, rent, amenity_endog)
 
         util = np.exp(
             delta[demographic.race]
@@ -298,7 +231,7 @@ class DiamondData:
 
         return prob.sum(axis=0)
 
-    def _get_delta(self, wage, rent):
+    def _get_delta(self, wage, rent, amenity_endog):
         """
         Calculate delta (average utility) for each city given wage and rent.
         """
@@ -306,7 +239,7 @@ class DiamondData:
         for race in [0, 1]:
             d_z = (
                 (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
-                + self.amenity_endog * self.params["beta_a"][race]
+                + amenity_endog * self.params["beta_a"][race]
                 + self.amenity_exog * self.params["beta_x"][race]
             )
             delta.append(d_z)
@@ -332,7 +265,15 @@ class DiamondData:
             )
             return np.concatenate([eq1, eq2])
 
-        sol = least_squares(rent_residuals, x0, xtol=tol, ftol=tol, gtol=tol)
+        sol = least_squares(
+            rent_residuals,
+            x0,
+            bounds=(1e-8, np.inf),
+            x_scale="jac",
+            xtol=tol,
+            ftol=tol,
+            gtol=tol,
+        )
         if not sol.success:
             logger.warning("Rent fixed point did not converge.")
 
@@ -344,3 +285,31 @@ class DiamondData:
         Check for convergence.
         """
         return np.max(np.abs(x_new - x)) < tol
+
+
+class Demographic:
+    def __init__(self, params, edu_level="H"):
+        self.params = params
+        self.edu_level = edu_level
+        self._initialize_params()
+
+    def _initialize_params(self):
+        # Number of individuals
+        self.N = self.params[self.edu_level]["N"]
+
+        # Set race based on probability of being black
+        self.race = np.random.binomial(
+            1, self.params[self.edu_level]["p_black"], self.N
+        )
+
+        # Set probability of being from that state
+        self.same_state = np.random.binomial(
+            1, self.params[self.edu_level]["p_state"], (self.N, self.params["J"])
+        )
+
+    def to_dataframe(self):
+        """
+        Convert the demographic data to a pandas DataFrame.
+        """
+        # @TODO: implement this
+        pass

@@ -51,7 +51,7 @@ with open("../variables.tex", "w") as f:
 print("variables.tex has been generated!")
 # %%
 default_seed = 273
-N_iters = 5
+N_iters = 10
 # %%
 for s in [default_seed + i for i in range(N_iters)]:
     logging.info(f"Simulating with seed {s}.")

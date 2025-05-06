@@ -54,6 +54,7 @@ cover/
 # Output files 
 *.csv
 *.pickle
+*.pkl
 *.DS_Store
 
 # Translations

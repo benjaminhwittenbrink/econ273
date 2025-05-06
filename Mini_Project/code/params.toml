@@ -1,6 +1,8 @@
 ####### Parameters 
-J = 50
+J = 20
 NUM_STATES = 10
+edu_types = ["H","L"]
+race_types = ["White","Black"]
 
 # Production function
 gamma_HH = -0.2
@@ -24,20 +26,36 @@ phi_reg = 0.4
 phi_a = 0.5
 
 # Utility
-beta_x  = [0.3, 0.7]
-beta_a  = [0.6, 0.4]
-beta_st = [0.2, 0.5]
-beta_w  = [0.6, 0.5]
 zeta = 0.8
+
+[beta_x]  
+White = 0.3
+Black = 0.7
+
+[beta_a] 
+White = 0.6
+Black = 0.4
+
+[beta_st]
+White = 0.2
+Black = 0.5
+
+[beta_w]
+White = 0.6
+Black = 0.5
 
 # Demographics
 [H]
-N = 100
-p_black = 0.2
+[H.Black]
+N = 20
+[H.White]
+N = 80
 
 [L]
-N = 200
-p_black = 0.9
+[L.Black]
+N = 180
+[L.White]
+N = 20
 
 ###### Observables
 # Housing Demand Instruments

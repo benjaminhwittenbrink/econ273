@@ -52,9 +52,9 @@ class DiamondData:
             "State": self.city_state,
             "P_Same_State": self.prob_same_state,
             "Population": self.population,
-            "Wage_H": self.wage_H,
-            "Wage_L": self.wage_L,
-            "Rent": self.rent,
+            "Log_Wage_H": self.wage_H,
+            "Log_Wage_L": self.wage_L,
+            "Log_Rent": self.rent,
             "Amenity_Endog": self.amenity_endog,
             "High_Ed_Population": self.H,
             "Low_Ed_Population": self.L,
@@ -86,7 +86,8 @@ class DiamondData:
         self.city_state = np.random.randint(
             1, self.params["NUM_STATES"] + 1, size=self.params["J"]
         )
-        self.prob_same_state = np.ones(self.params["J"]) * 1 / self.params["J"]
+        self.prob_same_state = np.random.uniform(0, 1, size=self.params["J"])
+        self.prob_same_state = self.prob_same_state / np.sum(self.prob_same_state)
 
         ###### Housing Supply ######
         # Initialize housing supply shifters
@@ -166,7 +167,7 @@ class DiamondData:
         """
 
         # initialize guess for wages, rents, and amenities
-        init = np.concatenate([np.ones(self.params["J"])] * 4)
+        init = np.concatenate([np.ones(self.params["J"]) for _ in range(4)])
         sol = least_squares(
             self._solve_prices,
             init,

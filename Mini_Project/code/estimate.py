@@ -4,6 +4,8 @@ import pandas as pd
 from scipy.optimize import minimize
 from tqdm import tqdm
 from typing import List, Dict, Tuple, Any
+from linearmodels.iv.model import IV2SLS
+import statsmodels.api as sm
 
 import utils
 
@@ -25,16 +27,19 @@ class DiamondModel:
         self.DD = data
         self.data = data.to_dataframe()
 
+        self.data["Log_H"] = np.log(self.data["High_Ed_Population"])
+        self.data["Log_L"] = np.log(self.data["Low_Ed_Population"])
+
         self.params = self.DD.params
         self.verbose = verbose
 
         # Containers to be populated later
         self.theta = None
-        self.theta_linear = None
-        self.theta_nonlinear = None
         self.W = None
         self.VCV = None
         self.g = None
+
+        self.est_params = dict()
 
     # -------------------------------------------------------------------------
     def _create_instruments(self):
@@ -48,121 +53,146 @@ class DiamondModel:
             Z_L_geo=lambda x: x["Z_L"] * x["Geographic_Constraint"],
         )
 
+        self.instruments = self.data[
+            ["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
+        ]
+
     # -------------------------------------------------------------------------
     #  Moment-condition builders  (TODO:)
     # -------------------------------------------------------------------------
-    def _moments_labor_demand(self, theta_L: np.ndarray) -> np.ndarray:
+    def _labor_demand_parameters(self) -> np.ndarray:
         """
-        theta_L:
-            gamma_HH, gamma_HL, gamma_LH, gamma_LL,
-            alpha_HH, alpha_HL, alpha_LH, alpha_LL
+        Run 2SLS regression to get labor demand parameters:
+        Log_Wage_H = gamma_HH * log(High_Ed_Population) + gamma_HL * log(Low_Ed_Population) + epsilon_H
+        Log_Wage_L = gamma_LH * log(High_Ed_Population) + gamma_LL * log(Low_Ed_Population) + epsilon_L
 
-        Returns a (N_obs x N_instr)  moment matrix, flattened to 1-D.
+        instruments: Z
         """
-        # 1. unpack parameters
-        (
-            gamma_HH,
-            gamma_HL,
-            gamma_LH,
-            gamma_LL,
-            alpha_HH,
-            alpha_HL,
-            alpha_LH,
-            alpha_LL,
-        ) = theta_L
+
         df = self.data
-        Z = df[
-            ["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
-        ].values  # shape (N, 6)
-        # 2. calculate residuals
-        res_H = (
-            df["Log_Wage_H"]
-            - gamma_HH * np.log(df["High_Ed_Population"])
-            - gamma_HL * np.log(df["Low_Ed_Population"])
-            - alpha_HH * np.log(df["Z_H"])
-            - alpha_HL * np.log(df["Z_L"])
-        )
-        res_L = (
-            df["Log_Wage_L"]
-            - gamma_LH * np.log(df["High_Ed_Population"])
-            - gamma_LL * np.log(df["Low_Ed_Population"])
-            - alpha_LH * np.log(df["Z_H"])
-            - alpha_LL * np.log(df["Z_L"])
-        )
-        # 3. calculate moments and aggregate
-        g_H = np.mean(res_H.to_numpy()[:, None] * Z, axis=0)
-        g_L = np.mean(res_L.to_numpy()[:, None] * Z, 0)
-        return np.concatenate([g_H, g_L])  # (12,)
 
-    def _moments_housing_supply(self, theta_N: np.ndarray) -> np.ndarray:
-        """Moment conditions for rent equation."""
+        IV_reg_H = IV2SLS(
+            dependent=df["Log_Wage_H"],
+            exog=None,
+            endog=df[["Log_H", "Log_L"]],
+            instruments=self.instruments,
+        ).fit()
+
+        self.est_params["gamma_HH"] = IV_reg_H.params.iloc[0]
+        self.est_params["gamma_HL"] = IV_reg_H.params.iloc[1]
+
+        IV_reg_L = IV2SLS(
+            dependent=df["Log_Wage_L"],
+            exog=None,
+            endog=df[["Log_H", "Log_L"]],
+            instruments=self.instruments,
+        ).fit()
+
+        self.est_params["gamma_LH"] = IV_reg_L.params.iloc[0]
+        self.est_params["gamma_LL"] = IV_reg_L.params.iloc[1]
+
+    def _housing_supply_parameters(self) -> np.ndarray:
+        """
+        Run 2SLS regression to get amenity supply parameters:
+        Log_Rent = i+ phi*log_HD + phi_geo*log_HD*Geographic_Constraint + phi_reg*log_HD*Regulatory_Constraint + epsilon_CC
+        """
         # 1. unpack parameters
-        zeta = theta_N[0]
-        phi, phi_geo, phi_reg = theta_N[8:11]
+        zeta = self.params["zeta"]
         df = self.data
         Z = df[["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]].values
         # 2. calculate residuals
-        HD = zeta * (
-            df["Low_Ed_Population"] * np.exp(df["Log_Wage_L"] - df["Log_Rent"])
-            + df["High_Ed_Population"] * np.exp(df["Log_Wage_H"] - df["Log_Rent"])
+        log_HD = np.log(
+            zeta
+            * (
+                df["Low_Ed_Population"] * np.exp(df["Log_Wage_L"] - df["Log_Rent"])
+                + df["High_Ed_Population"] * np.exp(df["Log_Wage_H"] - df["Log_Rent"])
+            )
         )
-        phi_all = (
-            phi
-            + phi_geo * df["Geographic_Constraint"]
-            + phi_reg * df["Regulatory_Constraint"]
-        )
-        res = df["Log_Rent"] - phi_all * np.log(HD)
-        # 3. calculate moments and aggregate
-        g = np.mean(res.to_numpy()[:, None] * Z, axis=0)
-        return g
 
-    def _moments_amenity_supply(self, theta_N: np.ndarray) -> np.ndarray:
-        """Moment conditions for amenity-supply equation."""
-        # 1. unpack parameters
-        phi_a = theta_N[7]
-        df = self.data
-        Z = df[["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]].values
-        # 2. calculate residuals
-        res = df["Amenity_Endog"] - phi_a * np.log(
-            df["High_Ed_Population"] / df["Low_Ed_Population"]
-        )
-        # 3. calculate moments and aggregate
-        g = np.mean(res.to_numpy()[:, None] * Z, axis=0)
-        return g
+        log_HD_x_geo = log_HD * df["Geographic_Constraint"]
+        log_HD_x_reg = log_HD * df["Regulatory_Constraint"]
+        endog = np.column_stack([log_HD, log_HD_x_geo, log_HD_x_reg])
 
-    def _moments_labor_supply(
-        self, theta_N: np.ndarray, delta_hat: np.ndarray
-    ) -> np.ndarray:
+        IV_reg = IV2SLS(
+            dependent=df["Log_Rent"],
+            exog=np.ones((len(df), 1)),
+            endog=endog,
+            instruments=self.instruments,
+        ).fit()
+
+        self.est_params["iota"] = np.exp(IV_reg.params.iloc[0])
+        self.est_params["phi"] = IV_reg.params.iloc[0]
+        self.est_params["phi_geo"] = IV_reg.params.iloc[0]
+        self.est_params["phi_reg"] = IV_reg.params.iloc[0]
+
+    def _amenity_supply_parameters(self) -> np.ndarray:
         """
-        Uses delta_hat (mean utilities) from BLP inversion plus nonlinear paramters
-        theta_N: (zeta, beta_w_White, beta_w_Black, beta_a_White, beta_a_Black, beta_st_White, beta_st_Black, phi_a)
+        Run 2SLS regression to get amenity supply parameters:
+        Amenity_Endog = phi_a * (log_H-log_L) + epsilon_
         """
-        # 1. unpack parameters
-        zeta = theta_N[0]
-        beta_w = {"White": theta_N[1], "Black": theta_N[2]}
-        beta_a = {"White": theta_N[3], "Black": theta_N[4]}
-        beta_st = {"White": theta_N[5], "Black": theta_N[6]}
-        phi_a = theta_N[7]
 
         df = self.data
-        Z = df[["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]].values
-        # 2. calculate residuals
-        g = []
-        for edu in self.params["edu_types"]:
-            for race in self.params["race_types"]:
-                res = (
-                    delta_hat[(edu, race)]
-                    - (df[f"Log_Wage_H"] - zeta * df["Log_Rent"]) * beta_w[race]
-                    - df["Amenity_Endog"] * beta_a[race]
-                )
-                g.append(np.mean(res.to_numpy()[:, None] * Z, axis=0))
-        return np.concatenate(g)
+
+        IV_reg = IV2SLS(
+            dependent=df["Amenity_Endog"],
+            exog=None,
+            endog=df["Log_H"] - df["Log_L"],
+            instruments=self.instruments,
+        ).fit()
+
+        self.est_params["phi_a"] = IV_reg.params.iloc[0]
+
+    def _labor_supply_parameters(self, delta_hat: np.ndarray) -> np.ndarray:
+        """
+        Run 2SLS regression to get labor supply parameters:
+        delta = phi_a * (log_H-log_L) + epsilon_
+        """
+
+        df = self.data
+        zeta = self.params["zeta"]
+
+        X = [df.Log_Wage_H - zeta * df.Log_Rent, df.Log_Wage_L - zeta * df.Log_Rent]
+        A = df.Amenity_Endog
+        Z_full = self.instruments
+
+        for race in self.params["race_types"]:
+            # stack dependent δ’s for both edus
+            ys = []
+            Xs = []
+            As = []
+            Zs = []
+
+            for i, edu in enumerate(self.params["edu_types"]):
+                # δ is keyed by (edu, race)
+                ys.append(delta_hat[(edu, race)])
+                Xs.append(X[i])
+                As.append(A)
+                Zs.append(Z_full)
+
+            # concatenate along the observation axis
+            y_stack = np.concatenate(ys)
+            X_stack = np.concatenate(Xs)
+            A_stack = np.concatenate(As)
+            endog = np.column_stack([X_stack, A_stack])
+            Z = pd.concat(Zs, axis=0).values
+
+            # run one IV regression per race
+            iv_reg = IV2SLS(
+                dependent=y_stack,
+                exog=None,  # no exogenous covariates
+                endog=endog,  # the two regressors whose β’s we want
+                instruments=Z,
+            ).fit()
+
+            # save
+            self.est_params[f"beta_w_{race}"] = iv_reg.params.iloc[0]
+            self.est_params[f"beta_a_{race}"] = iv_reg.params.iloc[1]
 
     # -------------------------------------------------------------------------
     # BLP inner loop  (share inversion)
     # -------------------------------------------------------------------------
     def _blp_inversion(
-        self, theta_N: np.ndarray, max_iter: int = 1000
+        self, beta_st: dict, max_iter: int = 1000
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Solve for delta hat that reproduces observed H/L shares, given nonlinear
@@ -173,11 +203,9 @@ class DiamondModel:
         ------
         delta_hat : dict with mean utilities for each type
         """
-        # 1. unpack parameters
-        beta_st = {"White": theta_N[5], "Black": theta_N[6]}
         df = self.data
 
-        # 2.  solve for delta for each type
+        # solve for delta for each type
         def objective(delta, df, edu, race):
 
             pop_est = self.DD._calculate_group_population(
@@ -199,40 +227,37 @@ class DiamondModel:
     # -------------------------------------------------------------------------
     # GMM housekeeping TODO:
     # -------------------------------------------------------------------------
-    def _stack_moments(self, theta_L: np.ndarray, theta_N: np.ndarray) -> np.ndarray:
-        delta_hat = self._blp_inversion(theta_N)
+    def _stack_moments(self, theta: np.ndarray) -> np.ndarray:
 
-        g1 = self._moments_labor_demand(theta_L)
-        g2 = self._moments_housing_supply(theta_N)
-        g3 = self._moments_amenity_supply(theta_N)
-        g4 = self._moments_labor_supply(theta_N, delta_hat)
+        df = self.data
 
-        return np.concatenate([g1, g2, g3, g4])
+        beta_st = {"White": theta[0], "Black": theta[1]}
+        delta_hat = self._blp_inversion(beta_st)
+        zeta = self.params["zeta"]
+
+        self._labor_demand_parameters()
+        self._housing_supply_parameters()
+        self._amenity_supply_parameters()
+        self._labor_supply_parameters(delta_hat)
+
+        moments = []
+        for edu in self.params["edu_types"]:
+            for race in self.params["race_types"]:
+                d = delta_hat[(edu, race)]
+                xi = (
+                    d
+                    - (df[f"Log_Wage_{edu}"] - zeta * df["Log_Rent"])
+                    * self.est_params[f"beta_w_{race}"]
+                    - df["Amenity_Endog"] * self.est_params[f"beta_a_{race}"]
+                )
+                g = np.mean(xi.to_numpy()[:, None] * self.instruments, axis=0)
+                moments.append(g)
+
+        return np.concatenate(moments)
 
     # Quadratic-form objective
-    def _gmm_objective_fn(self, theta: np.ndarray, W: np.ndarray, K_L: int) -> float:
-        theta_L, theta_N = theta[:K_L], theta[K_L:]
-        g = self._stack_moments(theta_L, theta_N)
-
-        # if self.verbose:
-        #     logger.info(f"gamma_HH: {theta_L[0]:.3f}")
-        #     logger.info(f"gamma_HL: {theta_L[1]:.3f}")
-        #     logger.info(f"gamma_LH: {theta_L[2]:.3f}")
-        #     logger.info(f"gamma_LL: {theta_L[3]:.3f}")
-        #     logger.info(f"alpha_HH: {theta_L[4]:.3f}")
-        #     logger.info(f"alpha_HL: {theta_L[5]:.3f}")
-        #     logger.info(f"alpha_LH: {theta_L[6]:.3f}")
-        #     logger.info(f"alpha_LL: {theta_L[7]:.3f}")
-        #     logger.info(f"zeta: {theta_N[0]:.3f}")
-        #     logger.info(f"beta_w: ({theta_N[1]:.3f}, {theta_N[2]:.3f})")
-        #     logger.info(f"beta_a: ({theta_N[3]:.3f}, {theta_N[4]:.3f})")
-        #     logger.info(f"beta_st: ({theta_N[5]:.3f}, {theta_N[6]:.3f})")
-        #     logger.info(f"phi_a: {theta_N[7]:.3f}")
-        #     logger.info(f"phi: {theta_N[8]:.3f}")
-        #     logger.info(f"phi_geo: {theta_N[9]:.3f}")
-        #     logger.info(f"phi_reg: {theta_N[10]:.3f}")
-        #     logger.info(f"Loss: {np.dot(g, g):.3f}\n\n\n")
-
+    def _gmm_objective_fn(self, theta: np.ndarray, W: np.ndarray) -> float:
+        g = self._stack_moments(theta)
         return g @ W @ g
 
     # -------------------------------------------------------------------------
@@ -243,19 +268,16 @@ class DiamondModel:
 
     def fit(
         self,
-        theta_L0: np.ndarray = np.ones(8),
-        theta_N0: np.ndarray = np.ones(11),
+        theta0: np.ndarray = np.ones(2),
         outer_options: Dict[str, Any] = None,
     ):
         """
         Two-step GMM: first W = I, then optimal W = (Sigma hat)^-1 with
         residual outer-product.
 
-        Linear paramters theta_L0:
+        Parameters:
             gamma_HH, gamma_HL, gamma_LH, gamma_LL,
-            alpha_HH, alpha_HL, alpha_LH, alpha_LL
-
-        Nonlinear paramters theta_N0:
+            alpha_HH, alpha_HL, alpha_LH, alpha_LL,
             zeta,
             beta_w_White, beta_w_Black,
             beta_a_White, beta_a_Black,
@@ -264,49 +286,42 @@ class DiamondModel:
             phi, phi_geo, phi_reg
 
         """
-
-        K_L = len(theta_L0)
-        theta0 = np.concatenate([theta_L0, theta_N0])
-
         # -- Step 1 --
         # W = identity matrix
         if self.verbose:
             logger.info("Step 1: GMM with identity matrix.")
 
-        W = np.eye(self._stack_moments(theta_L0, theta_N0).size)
+        W = np.eye(self._stack_moments(theta0).size)
         res1 = minimize(
             self._gmm_objective_fn,
             theta0,
-            args=(W, K_L),
+            args=(W,),
             method="BFGS",
             options=outer_options or {"disp": self.verbose},
         )
         theta1 = res1.x
-        g1 = self._stack_moments(theta1[:K_L], theta1[K_L:])
+        g1 = self._stack_moments(theta1)
 
         # ── Step 2 ──  (optimal weighting)
 
         if self.verbose:
             logger.info(f"First stage results: {theta1.round(2)}")
             logger.info("Step 2: GMM with optimal weighting matrix.")
-            logger.info("Calculating outer product of residuals.")
 
         Sigma_hat = np.outer(g1, g1)
         W_opt = np.linalg.inv(Sigma_hat + 1e-12 * np.eye(Sigma_hat.shape[0]))
         res2 = minimize(
             self._gmm_objective_fn,
             theta1,
-            args=(W_opt, K_L),
+            args=(W_opt,),
             method="BFGS",
             options=outer_options or {"disp": self.verbose},
         )
         theta2 = res2.x
-        g2 = self._stack_moments(theta2[:K_L], theta2[K_L:])
+        g2 = self._stack_moments(theta2)
 
         # save results
         self.theta = theta2
-        self.theta_linear = theta2[:K_L]
-        self.theta_nonlinear = theta2[K_L:]
         self.W = W_opt
         self.g = g2
 

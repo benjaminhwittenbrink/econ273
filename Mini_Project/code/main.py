@@ -62,50 +62,12 @@ for s in [default_seed + i for i in range(N_iters)]:
     DD.write()
 
 
-# %% Record true parameters
-
-# Linear paramters theta_L0:
-#     gamma_HH, gamma_HL, gamma_LH, gamma_LL,
-#     alpha_HH, alpha_HL, alpha_LH, alpha_LL
-
-# Nonlinear paramters theta_N0:
-#     zeta,
-#     beta_w_White, beta_w_Black,
-#     beta_a_White, beta_a_Black,
-#     beta_st_White, beta_st_Black,
-#     varphi_a,
-#     varphi, varphi_geo, varphi_reg
-
-theta_L0 = [
-    params["gamma_HH"],
-    params["gamma_HL"],
-    params["gamma_LH"],
-    params["gamma_LL"],
-    params["alpha_HH"],
-    params["alpha_HL"],
-    params["alpha_LH"],
-    params["alpha_LL"],
-]
-theta_N0 = [
-    params["zeta"],
-    params["beta_w"]["White"],
-    params["beta_w"]["Black"],
-    params["beta_a"]["White"],
-    params["beta_a"]["Black"],
-    params["beta_st"]["White"],
-    params["beta_st"]["Black"],
-    params["phi_a"],
-    params["phi"],
-    params["phi_geo"],
-    params["phi_reg"],
-]
-
 # %%
 reload(estimate)
 DM = estimate.DiamondModel(DD, seed=default_seed, verbose=True)
 DM.initialize()
 
 # %%
-DM.fit(theta_L0=theta_L0, theta_N0=theta_N0)
+DM.fit()
 
 # %%

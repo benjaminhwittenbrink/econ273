@@ -33,21 +33,24 @@ class DiamondData:
         if file_dir is None:
             file_dir = "/DiamondData"
         seed_str = "_" + str(self.seed)
-        date_str = "_" + dt.datetime.now().strftime("%Y_%m_%d_%s")
+        date_str = "_" + dt.datetime.now().strftime("%Y_%m_%d")
         dir = "../data" + file_dir + seed_str + date_str + "/"
         if not os.path.isdir(dir):
             os.makedirs(dir)
         with open(dir + "DiamondData.pkl", "wb") as f:
             pickle.dump(self, f)
-        df = self.to_dataframe()
-        df.to_csv(dir + "DiamondData.csv", index=False)
+        city_df, individual_df = self.to_dataframe()
+        city_df.to_csv(dir + "DiamondCityData.csv", index=False)
+        individual_df.to_csv(dir + "DiamondPersonData.csv", index=False)
         logger.info(f"Saved {self.__class__.__name__} to {dir}")
 
     def to_dataframe(self):
         """
         Convert the simulation results to a pandas DataFrame.
         """
-        data = {
+        city_data = {
+            "City": np.arange(self.params["J"]),
+            "State": self.city_state,
             "Population": self.population,
             "Wage_H": self.wage_H,
             "Wage_L": self.wage_L,
@@ -60,20 +63,66 @@ class DiamondData:
             "Z_H": self.Z_H,
             "Z_L": self.Z_L,
         }
-        return pd.DataFrame(data)
+
+        individual_data = {
+            "Individual_ID": np.arange(self.high_ed.N + self.low_ed.N),
+            "City": self.high_ed.city.tolist() + self.low_ed.city.tolist(),
+            "Home State": self.high_ed.state.tolist() + self.low_ed.state.tolist(),
+            "Education": ["H"] * self.high_ed.N + ["L"] * self.low_ed.N,
+            "Race": self.high_ed.race.tolist() + self.low_ed.race.tolist(),
+            "Same_State": self.high_ed.same_state[
+                np.arange(self.high_ed.N), self.high_ed.city
+            ].tolist()
+            + self.low_ed.same_state[
+                np.arange(self.low_ed.N), self.low_ed.city
+            ].tolist(),
+        }
+
+        return pd.DataFrame(city_data), pd.DataFrame(individual_data)
+
+    ### Subclass for each demographic group
+    class Demographic:
+        def __init__(self, parent_class, edu_level="H"):
+            self.parent_class = parent_class
+            self.params = parent_class.params
+            self.edu_level = edu_level
+            self._initialize_params()
+
+        def _initialize_params(self):
+            # Number of individuals
+            self.N = self.params[self.edu_level]["N"]
+
+            # Set race based on probability of being black
+            self.race = np.random.binomial(
+                1, self.params[self.edu_level]["p_black"], self.N
+            )
+
+            # Set probability of being from that state
+            self.state = np.random.randint(
+                1, self.params["NUM_STATES"] + 1, size=self.N
+            )
+            self.same_state = (
+                self.state[:, None] == self.parent_class.city_state[None, :]
+            ).astype(int)
+
+            # Initialize city of choice randomly
+            self.city = np.random.randint(0, self.params["J"], size=self.N)
 
     ### Public Methods
     def simulate(self):
-        logger.info("Starting simulation...")
         self._simulate_exog()
         self._simulate_endog()
-        logger.info("Simulation completed.")
 
     ### Private Methods
     def _simulate_exog(self):
         """
         Simulate exogenous variables: housing supply, population demographics, amenities, and shocks.
         """
+
+        ###### Randomly assign cities to states ######
+        self.city_state = np.random.randint(
+            1, self.params["NUM_STATES"] + 1, size=self.params["J"]
+        )
 
         ###### Housing Supply ######
         # Initialize housing supply shifters
@@ -105,8 +154,8 @@ class DiamondData:
         )
 
         ###### Population Demographics ######
-        self.high_ed = Demographic(self.params, edu_level="H")
-        self.low_ed = Demographic(self.params, edu_level="L")
+        self.high_ed = self.Demographic(self, edu_level="H")
+        self.low_ed = self.Demographic(self, edu_level="L")
 
         ###### Amenities ######
         self.amenity_endog = np.random.lognormal(
@@ -145,8 +194,6 @@ class DiamondData:
         sol = least_squares(
             self._solve_prices,
             init,
-            x_scale="jac",
-            bounds=(1e-8, np.inf),
             xtol=1e-10,
             ftol=1e-10,
             gtol=1e-10,
@@ -188,8 +235,8 @@ class DiamondData:
         Then, find the prices that those populations would imply.
         """
         # Get probability of being in each city for each type
-        H = self._calculate_population(self.high_ed, wage_H, rent, amenity_endog)
-        L = self._calculate_population(self.low_ed, wage_L, rent, amenity_endog)
+        H = self._calculate_population(self.high_ed, wage_H, rent)
+        L = self._calculate_population(self.low_ed, wage_L, rent)
 
         # Update prices given population
         wage_H = (
@@ -215,11 +262,11 @@ class DiamondData:
 
         return L, H, wage_L, wage_H, rent, amenity_endog
 
-    def _calculate_population(self, demographic, wage, rent, amenity_endog):
+    def _calculate_population(self, demographic, wage, rent):
         """
         Calculate population for each city given demographic.
         """
-        delta = self._get_delta(wage, rent, amenity_endog)
+        delta = self._get_delta(wage, rent)
 
         util = np.exp(
             delta[demographic.race]
@@ -229,9 +276,14 @@ class DiamondData:
         tot_util = util.sum(axis=1)
         prob = util / tot_util[:, np.newaxis]
 
+        # Randomly assign cities to individuals based on probabilities
+        cum_probs = np.cumsum(prob, axis=1)
+        u = np.random.rand(prob.shape[0], 1)
+        demographic.city = (u < cum_probs).argmax(axis=1)
+
         return prob.sum(axis=0)
 
-    def _get_delta(self, wage, rent, amenity_endog):
+    def _get_delta(self, wage, rent):
         """
         Calculate delta (average utility) for each city given wage and rent.
         """
@@ -239,7 +291,7 @@ class DiamondData:
         for race in [0, 1]:
             d_z = (
                 (wage - self.params["zeta"] * rent) * self.params["beta_w"][race]
-                + amenity_endog * self.params["beta_a"][race]
+                + self.amenity_endog * self.params["beta_a"][race]
                 + self.amenity_exog * self.params["beta_x"][race]
             )
             delta.append(d_z)
@@ -265,15 +317,7 @@ class DiamondData:
             )
             return np.concatenate([eq1, eq2])
 
-        sol = least_squares(
-            rent_residuals,
-            x0,
-            bounds=(1e-8, np.inf),
-            x_scale="jac",
-            xtol=tol,
-            ftol=tol,
-            gtol=tol,
-        )
+        sol = least_squares(rent_residuals, x0, xtol=tol, ftol=tol, gtol=tol)
         if not sol.success:
             logger.warning("Rent fixed point did not converge.")
 
@@ -285,31 +329,3 @@ class DiamondData:
         Check for convergence.
         """
         return np.max(np.abs(x_new - x)) < tol
-
-
-class Demographic:
-    def __init__(self, params, edu_level="H"):
-        self.params = params
-        self.edu_level = edu_level
-        self._initialize_params()
-
-    def _initialize_params(self):
-        # Number of individuals
-        self.N = self.params[self.edu_level]["N"]
-
-        # Set race based on probability of being black
-        self.race = np.random.binomial(
-            1, self.params[self.edu_level]["p_black"], self.N
-        )
-
-        # Set probability of being from that state
-        self.same_state = np.random.binomial(
-            1, self.params[self.edu_level]["p_state"], (self.N, self.params["J"])
-        )
-
-    def to_dataframe(self):
-        """
-        Convert the demographic data to a pandas DataFrame.
-        """
-        # @TODO: implement this
-        pass

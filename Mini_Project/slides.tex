@@ -1,0 +1,248 @@
+\documentclass{beamer}
+
+\AtBeginSection[]{
+  \begin{frame}
+  \vfill
+  \centering
+  \begin{beamercolorbox}[sep=8pt,center,shadow=true,rounded=true]{title}
+    \usebeamerfont{title}\insertsectionhead\par%
+  \end{beamercolorbox}
+  \vfill
+  \end{frame}
+}
+
+
+
+\input{Mini_Project/macros}
+
+\pagestyle{fancy}
+\fancyfoot[C]{\thepage} % page number in the center of the footer
+\renewcommand{\headrulewidth}{0pt} % remove header rule if desired
+\renewcommand{\footrulewidth}{0pt} % remove footer rule if desired
+% read in parameters
+
+
+\title{14.273 IO Mini-Project}
+\author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}
+
+\begin{document}
+
+\maketitle
+
+\section{Motivation}
+
+\begin{frame}{Overview}
+\begin{itemize}
+\item The paper: ``The Determinants and Welfare Implications of US Workers' Diverging Location Choices by Skill: 1980-2000" (Diamond \textit{AER} 2016)
+\item Big picture: structural model of labor demand, migration, housing prices, and amenities to estimate why high-skill workers are increasingly located in high-wage cities (``The Great Divergence") and estimate its welfare implications
+    \begin{itemize}
+    \item H0: High wage cities are high price cities $\implies$ wage differences overstate welfare differences 
+    \item H1: High wage cities are high amenity cities even conditional on housing prices $\implies$ wage differences understate welfare differences
+    \end{itemize}
+
+    \item Our main simplifications:  one exogenous and one endogenous amenity, simple scalar instrument vs. shift-share, one time period 
+    %(reinterpret everything in first differences)
+
+    \item Tools from the class: BLP-like estimation, GMM.
+
+\end{itemize}
+\end{frame}
+
+\section{Model}
+
+% \begin{frame}{Notation}
+% \begin{itemize}
+% \item City $j$
+% \item High- and low-skill population $H_j$ and $L_j$
+% \item 
+% \end{itemize}
+
+    
+% \end{frame}
+
+
+ \begin{frame}{Labor Demand}
+
+\begin{itemize}
+\item For city $j$ and high- and low-skill populations $H_j$ and $L_j$, follow the paper in specifying wages as 
+ \begin{align}
+     w_{j}^H &= \gamma_{HH} \log H_{j} + \gamma_{HL}  \log L_{j} +  \varepsilon_{j}^H \label{eq_wage_h_aprx} 
+    \\ 
+     w_{j}^L &= \gamma_{LL}  \log L_{j} + \gamma_{LH}   \log H_{j} +  \varepsilon_{j}^L \label{eq_wage_l_aprx} 
+\end{align}
+
+\item Reduced-form approximation that captures both classical labor demand effects and endogenous productivity from (relative) supply of different types
+\end{itemize}
+
+\end{frame}
+
+%\begin{equation}
+%\%end{equation}
+%where $R_{jt}$ are local rents and $W_{jt}^{S}$ are skill  specific wages.
+
+ \begin{frame}{Labor Supply }
+ 
+ No choice of how much labor to supply, just where to locate. Location/migration model $\approx$ BLP
+\begin{itemize}
+\item Characteristics:  (skill-specific) log wages, log rents, exogenous amenity $x_{j}^a$ (unobserved -- this is  $\xi_{j}$ in BLP) , endogenous amenity $a_j$ (observed), and indicator for individual's state of birth $st_i$.
+\begin{itemize}
+\item $st_i$ observed, but varies even conditional on skill type: $\implies $ can't use logit directly, BLP-like estimation.
+\end{itemize}
+
+\item Following the paper, coefficients vary with race indicator $z$, whose distribution differs for $H$ and $L$, yielding mean utility: 
+$$\delta_{jt}^z = (w_{j} - \zeta r_{j})\beta^w z + a_{j}\beta^a z + x_{j}^A\beta^xz$$
+and education-specific pop. shares of 
+\begin{equation}
+S_{j} = \sum_{i\in\mc{X}} \frac{\exp(\delta_{j}^{z_i} + x_j^{st}st_i\beta^{st}z_i)}{\sum_{k} \exp(\delta_{jt}^{z_i} + x_j^{st}st_i\beta^{st}z_i)}, X \in {H,L} 
+\end{equation}
+
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Local Good Demand}
+Indirect utility function in previous slide is microfounded with Cobb-Douglas utility over a national good and a local housing good. Letting log wages relative to national good be $w^S_{jt}$ for each skill type and log rents $r_{jt}$, we then have local housing demand of 
+\begin{equation}
+    HD_{ij} = \zeta \exp \left(\frac{w^X_{j}}{r_{j}}\right), X \in \{H,L\}
+\end{equation}
+
+Why does this matter? In BLP don't care how money is spent on cars versus other goods -- but here we are endogenizing the price of other goods (housing) too.
+\end{frame}
+
+\begin{frame}{Housing and Amenity Supply}
+\begin{itemize}
+\item Assume
+\begin{equation}\label{eq: housing supply}
+    r_{j}  = \log \iota + \log CC_{j} + \varphi_j \log HD_{j}.
+\end{equation}
+
+where $\iota$ is housing interest rate, $CC_{j}$ are city-specific construction costs (\textbf{both unobserved}), and $\log HD_{j}$ is log local good consumption as before. We assume that $$\varphi_j  = \varphi +\varphi^{geo} \exp(x_j^{geo}) + \gamma^{reg}\exp(x_j^{reg}) $$
+\item Key interaction effect: demand for local goods raises land costs and thereby rental rates
+\item Endogenous amenities given by \begin{equation} a_{j}= \gamma^a \ln \left(\frac{H_j}{L_j}\right) + \varepsilon^a_j\end{equation}
+\item Key interaction effect: ratio of high to low skill types affects level of amenity (e.g., nicer schools or parks).
+
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Equilibrium}
+Equilibrium given by 
+market clearing in 
+\begin{itemize}
+\item Skill-specific labor demand and supply/population: (1) and (2) and (3) hold simultaneously 
+\item Housing supply implied by (5) equals housing demand, given by (4) weighted by skill types: $$ HD_{j}^* = L_{j}^* \frac{\zeta \exp(w_{j}^{L^*})}{\exp(r_{j}^*)} + H_{j}^* \frac{\zeta \exp(w_{j}^{H^*})}{\exp(r_{j}^*)}$$
+
+\item Amenity supply equals amenity ``demand", given by (5) and (3) holding simultaneously
+ 
+\end{itemize}
+\end{frame}
+\section{Identification and Estimation}
+
+% \begin{frame}{Overview}
+% Two identification challenges
+% \begin{itemize}
+%     \item Unobserved quality of locations -- modeled as unobserved exogenous amenity $x_{jt}^a$ -- handle using BLP approach
+%     \item Simultaneity of supply and demand -- need an instrument
+%     \end{itemize}
+% Diamond uses Bartik-style instruments; we will instead posit an instrument $z_j^S$ varying at the city by skill level that affects wages independently of labor supply. 
+
+% In particular, for $X \in \{H, L\}$ we assume 
+%  $$ w_{j}^X = \gamma_{HH}  \ln H_{j} + \gamma_{HL} \ln L_{j}+\gamma_{BSH} Z_{j}^H  + \gamma_{BSL} Z_{j}^L + \tilde{\varepsilon}_{jt}^X
+%  $$
+
+% where $Z^H_j, Z^L_j \perp \tilde{\varepsilon}_{j}^X$. 
+% This directly implies our first moment conditions: at the true parameter values,  
+% $$E[ \tilde\varepsilon_{jt}^X Z_{jt}^Y]=0, \forall X,Y \in \{H,L\} \times \{H,L\}.$$ 
+
+%  \end{frame}
+
+
+ \begin{frame}{Overview}
+Two identification challenges
+\begin{itemize}
+    \item Unobserved quality of locations -- modeled as unobserved exogenous amenity $x_{jt}^a$ -- handle using BLP approach
+    \item Simultaneity of supply and demand -- need an instrument
+    \end{itemize}
+Diamond uses Bartik-style instruments; we will instead posit an instrument $z_j^S$ varying at the city by skill level that affects wages independenly of labor supply. 
+
+In particular, for $ X \in\{H,L\}$ we assume 
+ $$ w_{j}^X = \gamma_{HH}  \ln H_{j} + \gamma_{HL} \ln L_{j}+\gamma_{BSH} Z_{j}^H  + \gamma_{BSL} Z_{j}^L + \tilde{\varepsilon}_{jt}^X
+ $$
+
+where $Z^H_j, Z^L_j \perp \tilde{\varepsilon}_{j}^s$
+This directly implies our first moment condition: at the true parameter values,  
+$$E[\tilde\varepsilon_{jt}^X  Z_{jt}^Y]=0, \quad \forall\: X,Y \in \{H,L\} \times \{H,L\}.$$ 
+
+\end{frame}
+
+\begin{frame}{Housing Supply}
+
+ \begin{itemize}
+     \item Recall unobservables for housing supply are construction costs $CC_j$ and interest rate $\iota$  
+     \item But we have access to additional observable shifters of housing costs, $x^{reg}$ $x^{geo}$. 
+     \item Under the assumption that $x^{reg}$ and $x^{geo}$ and the $Z$s are independent of the unobservables, have moment condition 
+$$
+E[ \ln (CC_{j}) \psi] = 0 
+$$
+for all $\psi \in \{ Z^X_{j},  Z_{j}^X x_j^{reg},  Z_{j}^X x_j^{geo}\}$ and for all $X\in\{L,H\}$.
+
+\item Intuition: wage shocks shift labor (population) supply, which affects housing supply via local good consumption
+     
+ \end{itemize}
+
+ \end{frame}
+
+
+ \begin{frame}{Labor Supply/Population}
+
+ \begin{itemize} \item Unobservable determinant of labor supply/population decision is exogenous amenity $x_j^A\equiv \xi_j$
+
+ \item Moment condition is 
+
+ $$
+E[ \xi_{jt}^z \psi] = 0 
+$$
+for all $\psi \in \{ Z_{jt}^X,  Z_{jt}^X x_j^{reg},  Z_{jt}^X x_j^{geo}\}$ and for all $X\in\{L,H\}$.
+
+\item Wage shocks influence location choices both directly and indirectly (through prices and amenities) but should be orthogonal to exogenous amenities at fixed parameter values
+
+     
+ \end{itemize}
+\end{frame}
+
+\begin{frame}{Amenity Supply}
+
+ \begin{itemize}
+    \item To identify $\varphi^a$, instrument skill ratio with our instrument  
+$$ a_{j} = \varphi^a \log \left(\frac{H_{j}}{L_{j}}\right) + \epsilon^a_j.
+$$
+\item Under assumption that instruments are uncorrelated with unobserved exogenous changes in city's local amenities, have moment conditions
+% Identify supply $\varphi^a$ by instrumenting in the employment ratio with our instrument. That is, we have moment restrictions 
+$$
+E[\epsilon^a_{j} \psi] = 0$$
+where $\psi \in \{ Z^X_{j}, Z_{j}^X x_j^{reg}, Z_{j}^X x_j^{geo}\}$ and for all $X\in\{L,H\}$.
+
+ \end{itemize}
+
+ \end{frame}
+
+ \begin{frame}{Estimation Procedure}
+ 
+\begin{itemize}
+\item Linear parameters: 
+$$\gamma_{HH}, \gamma_{HL}, \gamma_{LL}, \gamma_{LH}, \alpha_{HH}, \alpha_{HL}, \alpha_{LH}, \alpha_{LL},  \iota, \phi, \phi_{geo}, \phi_{reg}, \sigma_x, \beta^a, \beta^w, \beta^x $$
+
+\item Nonlinear parameters: $\beta^{st}$
+
+\item Estimation procedure a la BLP: 
+\begin{itemize}
+\item Outer loop: conjecture $\beta^{st}$, and the linear parameters that are not in $\delta$
+\item Inner loop: given $\beta^{st}$, first solve for $\delta_j^{z_i}$s using MLE given (3). 
+\item Then estimate parameters in $\delta_j^z$ $(\beta^w, \beta^a, \beta^x)$ using  labor supply moment condition $E[\xi_j^z \psi]=0$
+\item In outer loop, use all moment conditions and minimize over parameters.
+\item Estimate via two-step.
+
+\end{itemize}
+\end{itemize}
+ \end{frame}
+ \end{document}

@@ -1,0 +1,223 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{mathptmx}
+\usepackage[parfill]{parskip}
+
+\input{macros}
+
+\newcommand{\epszero}{\epsilon_{0t}}
+\newcommand{\epsone}{\epsilon_{1t}}
+
+\title{14.273 IO Problem Set 4}
+\author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}
+
+\begin{document}
+
+\maketitle
+ \section*{Model}
+
+This is a simple version of Ericson \& Pakes (1995). Firms discount the future by $\delta = 0.8$. In each period, firms face a quantity decision and an entry/exit decision. A state variable tracks whether firm $i$ is in the market ($s_{it} = 1$) or not ($s_{it} = 0$). There are four possible values for the state of the game at time $t$:
+
+\[
+s_t = (s_{1t}, s_{2t}) \in S = \{(0,0), (0,1), (1,0), (1,1)\}.
+\]
+
+If both firms are in the market ($s_t = (1,1)$), firms simultaneously make quantity choices $q_{it} \in \{0,1\}$ for duopoly profits
+\[
+\Pi^d_{it} = (1 + q_{it})A - q_{-it}B.
+\]
+
+If no more than one firm is in the market ($s_t \in \{(0,0), (0,1), (1,0)\}$), there is no quantity choice. The firm in the market makes monopoly profits
+\[
+\Pi^m_{it} = 2A,
+\]
+while profits for the firm(s) outside the market are
+\[
+\Pi^o_{it} = 0.
+\]
+
+Firms decide whether they want to be in the market for the next period or not. This choice is captured by $a_{it} \in \{0,1\}$, with $a_{it} = 1$ indicating that firm $i$ chooses to be in the market in period $t+1$. Incumbents that exit the market receive scrap values
+
+\[
+\varphi_{it} \sim \text{iid } U[0,1].
+\]
+
+Potential entrants that enter the market pay entry costs
+
+\[
+C + \psi_{it}, \quad \psi_{it} \sim \text{iid } U[0,1].
+\]
+
+Scrap values and entry costs are privately observed, but $C$ and the distributions of $\varphi_{it}$ and $\psi_{it}$ are common knowledge. Firms that exit the market are allowed to re-enter the market at a later point.
+
+\newpage
+
+\section*{Exercises}
+
+\begin{enumerate}
+    \item Write down the value function $V(s, \varepsilon_i)$ that describes the firm’s problem, for each of the four possible values of $s$ and for arbitrary $\varepsilon_i = (\varphi_i, \psi_i)$, as functions of
+    \begin{itemize}
+        \item (i) ex-ante value functions $V(s)$, and
+        \item (ii) either four indifference cutoffs for $\varepsilon_{it}$\footnote{For example, if $s = (0,1)$, incumbent exits if scrap value is higher than some cutoff $\bar{\varphi}_{(0,1)/(1,0)}$ and entrant enters if the entry costs are lower than some cutoff $\bar{\psi}_{(0,1)/(1,0)}$.}
+        or four choice probabilities $p_{-i}(s_i, s_{-i})$.
+    \end{itemize}
+
+    \textit{Hint:} Because current quantity decisions do not affect future states or profits, each firm chooses quantity as if they play a static duopoly game.
+
+\begin{answer}
+First note that the static duopoly game has the following solution: for $A>0$, $q_{it}=1$ is a strictly dominant strategy for each firm so there is a unique equilibrium of $q_{it}=1,q_{-it}=1$ yielding profits of $2A-B$ to each firm.
+Then for each state $s$ we write the value function of the firm $i$ as the max of exiting/staying out of the market vs. entering/staying in the market plus the implied continuation value for that choice. For example, for $s = (0,0)$, the value of staying out is just the continuation value while the value of entering is the up front cost $-(C + \psi_{it})$ plus the continuation value. That is:
+\[
+  V(s,\varepsilon_i)
+  = \underbrace{\pi_i(s)}_{\text{current payoff}} + \max_{a_i\in\{0,1\}}
+    \Bigl\{
+\underbrace{\varepsilon_i(a_i)}_{\text{scrap/entry payoff}}
++\delta \: \mathbb{E}\bigl[V(s'=(a_i,a_{-i}),\varepsilon')\mid s,a_i\bigr]\Bigr\}
+\]
+Thus, 
+\begin{equation*}
+    V(s \equiv (0,0),\varepsilon_i) = \max \{ \delta E[ V((0,a_{{-i}}),\varepsilon)\mid s],  -C - \psi_{it} +\delta E[ V((1,a_{{-i}}),\varepsilon] \mid s]\}.
+\end{equation*}
+Likewise for $s \in \{(0,1), (1,0), (1,1)\}$:
+
+ \begin{align*}
+ V(s \equiv (0,1),\varepsilon_i) & = \max \{  \delta E[ V((0,a_{{-i}}),\varepsilon) \mid s], -C- \psi_{it} + \delta E[ V((1,a_{{-i}}),\varepsilon \mid s] \} \\
+ V(s \equiv (1,0),\varepsilon_i) & =2A +  \max \{ \varphi_{it}+ \delta E[ V((0,a_{{-i}}),\varepsilon) \mid s], \delta E[ V((1,a_{{-i}}),\varepsilon] \mid s]\} \\
+ V(s \equiv (1,1),\varepsilon_i) & = 2A-B +\max \{\varphi_{it} + \delta E[ V((0,a_{{-i}}),\varepsilon) \mid s], \delta E[ V((1,a_{{-i}}),\varepsilon \mid s] \} 
+\end{align*}
+
+Let $\tilde{V}(s_1,s_2) = E[V((s_1,s_2), \varepsilon)]$ and 
+\begin{align*}
+    p_{i}(s_1,s_2) &= Pr(a_{i} = 1 \mid s = (s_1,s_2))\\
+    p_{-i}(s_1,s_2) &= Pr(a_{-i} = 1 \mid s = (s_1,s_2)),
+\end{align*}
+Observe that since the problem is symmetric we have that $p_i(s_1,s_2) = p_{-i}(s_2,s_1)$. Then, note that 
+\begin{align*}
+        E[V((s_1',a_{-i}),\epsilon)|(s_1,s_2)] &= p_{-i}(s_1,s_2) E[V((s_1',1),\epsilon)] + (1- p_{-i}(s_1,s_2))E[V((s_1',0),\epsilon] \\
+        &= p_{-i}(s_1,s_2) \tilde{V}(s_1',1)+(1- p_{-i}(s_1,s_2))\tilde{V}(s_1',0).
+\end{align*}
+Therefore, our value function simplifies to, 
+\[
+  V(s,\varepsilon_i)
+  = \underbrace{\pi_i(s)}_{\text{current payoff}} + \max_{a_i\in\{0,1\}}
+    \Bigl\{
+      \underbrace{\varepsilon_i(a_i)}_{\text{scrap/entry}}
+      +\delta
+      \bigl[p_{-i}(s)\tilde{V}(a_i,1)
+      +(1-p_{-i}(s))\,\tilde{V}(a_i,0)\bigr]
+    \Bigr\}
+\]
+where current-period payoff $\pi_i(s)$ is given by
+\[
+\pi_i(s) =
+\begin{cases}
+  0 & \text{if } s = (0,0), \\
+  2A & \text{if } s \in \{(1,0), (0,1)\}, \\
+  2A - B & \text{if } s = (1,1).
+\end{cases}
+\]
+and the additional payoff $\varepsilon_i(a_i)$ from the entry or exit decision is
+\[
+\varepsilon_i(a_i) =
+\begin{cases}
+  - (C + \psi_{it}) & \text{if } s_i = 0 \text{ and } a_i = 1 \quad \text{(entry)}, \\
+  \varphi_{it} & \text{if } s_i = 1 \text{ and } a_i = 0 \quad \text{(exit)}, \\
+  0 & \text{otherwise}.
+\end{cases}
+\]
+
+
+
+\end{answer}
+
+\item Let $(A, B, C) = (0.3, 0.6, 0.15)$. Solve for the game’s equilibrium by finding the roots to a system of non-linear equations.
+
+\textit{Hint:} You should have eight equations in eight unknowns. The eight equations include four Bellman equations and four indifference/choice probability equations; the eight unknowns include four $V(s)$ and four cut-offs/choice probabilities.
+
+\begin{answer}
+
+The eight unknowns will be the four integrated value functions $\tilde{V}(s)$ and four choice probabilities $p_{-i}(s)$ for $s \in \{(0,0), (0,1), (1,0), (1,1)\}$.
+
+To proceed, suppose first that firm 1 is outside the market. Then there will be a cutoff $\bar{\psi}(s_2)$ such that firm 1 is indifferent between entering or staying outside. Setting the two arguments of the RHS of the Bellman equation equal to each other and solving for $\bar{\psi}$ we get that,
+\[
+\bar{\psi}(s_2) = \delta p_{-i}(0,s_2)(\tilde{V}(1,1)-\tilde{V}(0,1)) +  \delta (1- p_{-i}(0,s_2))(\tilde{V}(1,0)-\tilde{V}(0,0)) - C
+\]
+
+Similarly, when firm 1 is inside the market, there is a cutoff $\bar{\varphi}(s_2)$ such that firm 1 is indifferent between staying insider or exiting. We get,
+\[
+\bar{\varphi}(s_2) = \delta p_{-i}(1,s_2)(\tilde{V}(1,1)-\tilde{V}(0,1)) + \delta (1-p_{-i}(1,s_2))(\tilde{V}(1,0)-\tilde{V}(0,0))
+\] 
+
+Therefore, using the fact that the  probabilities are symmetric for firm 1 and 2, and that $\psi$ and $\varphi$ are uniform on [0,1],
+\begin{align*}
+    p_{-i}(s_1,0) &= Pr(\psi < \bar{\psi}(s_1)) \\
+    &= \bar{\psi}(s_1)
+\end{align*}
+and
+\begin{align*}
+    p_{-i}(s_1,1) &= Pr(\varphi < \bar{\varphi}(s_1)) \\
+    &= \bar{\varphi}(s_1)
+\end{align*}
+which gives us four equations for each choice probability.
+
+Moreover, we can solve for the expected utility when firm 1 is currently outside the market,
+\begin{align*}
+    \tilde{V}(0,s_2) &= E[V((0,s_2),\varepsilon] \\
+    &= p_{-i}(0,s_2)p_{-i}(s_2,0)\Bigr[-C + E[\psi|\psi<\bar{\psi}(s_2)] +\delta\tilde{V}(1,1)\Bigr]\\
+    &\quad + p_{-i}(0,s_2)(1-p_{-i}(s_2,0))\Bigr[\delta\tilde{V}(0,1)\Bigr]\\
+    &\quad + (1-p_{-i}(0,s_2))p_{-i}(s_2,0)\Bigr[-C + E[\psi|\psi<\bar{\psi}(s_2)] +\delta\tilde{V}(1,0)\Bigr]\\
+    &\quad + (1-p_{-i}(0,s_2))(1-p_{-i}(s_2,0))\Bigr[\delta\tilde{V}(0,0)\Bigr] \\
+    &= p_{-i}(0,s_2)p_{-i}(s_2,0)\Bigr[-C + \frac{\bar{\psi}(s_2)}{2} +\delta\tilde{V}(1,1)\Bigr]\\
+    &\quad + p_{-i}(0,s_2)(1-p_{-i}(s_2,0))\Bigr[\delta\tilde{V}(0,1)\Bigr]\\
+    &\quad + (1-p_{-i}(0,s_2))p_{-i}(s_2,0)\Bigr[-C + \frac{\bar{\psi}(s_2)}{2} +\delta\tilde{V}(1,0)\Bigr]\\
+    &\quad + (1-p_{-i}(0,s_2))(1-p_{-i}(s_2,0))\Bigr[\delta\tilde{V}(0,0)\Bigr]
+\end{align*}
+and the expected utility when firm 1 is currently in the market,
+\begin{align*}
+    \tilde{V}(1,s_2) &= E[V((1,s_2),\varepsilon] \\
+    &= \pi_i(1,s_2) \\
+    &\quad + p_{-i}(1,s_2)p_{-i}(s_2,1)\Bigr[\delta\tilde{V}(1,1)\Bigr]\\
+    &\quad + p_{-i}(1,s_2)(1-p_{-i}(s_2,1))\Bigr[E[\varphi | \varphi > \tilde{\varphi}] + \delta\tilde{V}(0,1)\Bigr]\\
+    &\quad + (1-p_{-i}(1,s_2))p_{-i}(s_2,1)\Bigr[\delta\tilde{V}(1,0)\Bigr]\\
+    &\quad + (1-p_{-i}(1,s_2))(1-p_{-i}(s_2,1))\Bigr[E[\varphi | \varphi > \tilde{\varphi}] + \delta\tilde{V}(0,0)\Bigr] \\
+    &= \pi_i(1,s_2) \\
+    &\quad + p_{-i}(1,s_2)p_{-i}(s_2,1)\Bigr[\delta\tilde{V}(1,1)\Bigr]\\
+    &\quad + p_{-i}(1,s_2)(1-p_{-i}(s_2,1))\Bigr[\frac{1+\bar{\varphi}(s_2)}{2}+\delta\tilde{V}(0,1)\Bigr]\\
+    &\quad + (1-p_{-i}(1,s_2))p_{-i}(s_2,1)\Bigr[\delta\tilde{V}(1,0)\Bigr]\\
+    &\quad + (1-p_{-i}(1,s_2))(1-p_{-i}(s_2,1))\Bigr[\frac{1+\bar{\varphi}(s_2)}{2}+\delta\tilde{V}(0,0)\Bigr]
+\end{align*}
+for $s_2\in\{0,1\}$.
+
+Therefore, we end up with 8 equations and 8 unknowns. We rewrite the 8 equations below for convenience,
+\begin{align}
+    p_{00} &= -C + \delta \left[p_{00}\Bigr(\tilde{V}_{11}-\tilde{V}_{01}\Bigr) + q_{00}\Bigr(\tilde{V}_{10}-\tilde{V}_{00}\Bigr)\right] \\
+    p_{10} &= -C + \delta \left[p_{01}\Bigr(\tilde{V}_{11}-\tilde{V}_{01}\Bigr) + q_{01}\Bigr(\tilde{V}_{10}-\tilde{V}_{00}\Bigr)\right] \\
+    p_{01} &= \delta \left[p_{10}\Bigr(\tilde{V}_{11}-\tilde{V}_{01}\Bigr) + q_{10}\Bigr(\tilde{V}_{10}-\tilde{V}_{00}\Bigr)\right] \\
+    p_{11} &= \delta \left[p_{11}\Bigr(\tilde{V}_{11}-\tilde{V}_{01}\Bigr) + q_{11}\Bigr(\tilde{V}_{10}-\tilde{V}_{00}\Bigr)\right] \\
+    \tilde{V}_{00} &= -p_{00}\Bigr[C + \frac{p_{00}}{2} \Bigr] + \delta\Bigr(p_{00}(p_{00}\tilde{V}_{11} + q_{00}\tilde{V}_{10}) + q_{00}(p_{00}\tilde{V}_{01} + q_{00}\tilde{V}_{00})\Bigr) \\
+    \tilde{V}_{01} &= -p_{10}\Bigr[C + \frac{p_{10}}{2} \Bigr] + \delta\Bigr(p_{10}(p_{01}\tilde{V}_{11} + q_{01}\tilde{V}_{10}) + q_{10}(p_{01}\tilde{V}_{01} + q_{01}\tilde{V}_{00})\Bigr) \\
+    \tilde{V}_{10} &=\pi_{10} + \frac{q_{01}(1+p_{01})}{2}   + \delta\Bigr(p_{01}(p_{10}\tilde{V}_{11} + q_{10}\tilde{V}_{10}) + q_{01}(p_{10}\tilde{V}_{01} + q_{10}\tilde{V}_{00}) \Bigr) \\
+    \tilde{V}_{11}&=\pi_{11} + \frac{q_{11}(1+p_{11})}{2}  + \delta\Bigr(p_{11}(p_{11}\tilde{V}_{11} + q_{11}\tilde{V}_{10})+q_{11}(p_{11}\tilde{V}_{01} + q_{11}\tilde{V}_{00})\Bigr)
+\end{align}
+where $\tilde{V}_{ij}\equiv\tilde{V}(i,j)$, $\pi_{ij}\equiv\pi_{i}(i,j)$ $p_{ij}\equiv p_{-i}(i,j)$ and $q_{ij}\equiv 1-p_{-i}(i,j)$
+
+\end{answer}
+
+
+    If solving for cut-offs, derive choice probabilities in the last step.
+
+    \item Generate data from your solution in (2), where you derived choice probabilities conditional on the four possible states. Read \textit{“Asymptotic Least Squares Estimators for Dynamic Games”} by Pesendorfer and Schmidt-Dengler and implement their estimator.
+
+    \textit{Hint:} First express $V$ in terms of parameters $\theta$, known primitives, and estimated choice probabilities $\hat{p}$. \footnote{You can use forward simulation, although in this case, you have a nice analytical closed form for $V(\hat{p}, \theta)$.}
+
+    Once you have $V(\hat{p}, \theta)$, you can obtain guesses for the choice-specific value functions and choice probabilities $\tilde{p}(\hat{p}, \theta)$, build a least square objective function over deviations from observed choice probabilities $\hat{p} - \tilde{p}(\hat{p}, \theta)$, and search over unknown parameters $\theta = (A,B,C)$ that minimize these deviations.
+
+\begin{answer}
+\end{answer}
+    
+\end{enumerate}
+
+
+\end{document}

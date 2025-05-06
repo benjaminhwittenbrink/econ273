@@ -1,0 +1,356 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{mathptmx}
+\usepackage[parfill]{parskip}
+
+\input{macros}
+
+\newcommand{\epszero}{\epsilon_{0t}}
+\newcommand{\epsone}{\epsilon_{1t}}
+
+\title{14.273 IO Problem Set 3}
+\author{Benjamin Wittenbrink, Jack Kelly, and Veronicá Bäcker-Peral}
+
+\begin{document}
+
+\maketitle
+
+\section{Single Agent Dynamics}
+
+This problem is designed to help you to understand the NFP and CCP algorithm for estimation of single agent dynamic discrete choice model.
+
+\subsection{Model}
+
+As in Rust (1987), firms use machines to produce output. Older machines are more likely to break down and in each period the operator has the option of replacing the machine. Let $a_t$ be the age of machine at time $t$ and let the current payoff flow, given state $a_t$, action $i_t$ and shocks $\epsilon_{0t}, \epsilon_{1t}$, be 
+\[
+\Pi(a_t, i_t, \epsilon_{0t}, \epsilon_{1t}) = \begin{cases}
+    R + \epsilon_{1t} & \text{ if $i_t = 1$} \\ 
+    \mu a_t + \epsilon_{0t} & \text{ if $i_t = 0$} 
+\end{cases}
+\]
+where $i_t = 1$ if the firm decides to replace the machine at $t$, $R$ is the cost of the new machine, and $\epsilon_{0t}, \epsilon_{1t}$ are time-specific shocks to the pay-offs from not
+replacing and replacing respectively.
+
+Assume $\epsilon_{0t}, \epsilon_{1t}$ are iid T1EV. Assume a simple law of motion for the
+age state 
+\[
+a_{t+1} = \begin{cases}
+    1 & \text{ if $i_t = 1$} \\ 
+    \min\{5, a_t + 1\} & \text{ if $i_t = 0$} 
+\end{cases}
+\]
+That is, if not replaced, the machine ages by one year up to a maximum of 5 years. After 5 years, the machine’s age is fixed at 5 until replacement. If replaced in the current year, the machine’s age next year is 1. Note that $i_t = 1$ is a renewal action because $a_{t+1}(i_t = 1, a_t) = a_{t+1}(i_t = 1) = 1$. Also note that
+the law of motion is deterministic.
+
+
+\subsection{Exercises}
+
+The goal is to estimate $\theta \equiv \{\mu, R\}$. 
+
+\begin{enumerate}
+\item Write down the sequence problem for the firm.
+
+\begin{answer}
+
+The sequence problem is given as 
+\[
+\max_{\{i_t\}_{t=0}^\infty} E\left[
+\sum_{t=0}^\infty \beta^t \Pi(a_t, i_t, \epszero, \epsone)
+\right]
+\]
+where 
+\[
+a_{t+1} = \begin{cases}
+    1 & \text{ if $i_t = 1$} \\ 
+    \min\{5, a_t + 1\} & \text{ if $i_t = 0$} 
+\end{cases}
+\]
+and $a_0$ is given. 
+
+
+
+\end{answer}
+
+\item Write down Bellman’s equation for the value function of the firm. $- V(.;\theta) = f(V(.;, \theta))$ where $V(.;\theta)$ is a $5 \times 1$ vector. Express the value function in terms of choice-specific conditional value functions $\bar{V}_0(., \theta)$ and $\bar{V}_1(., \theta)$.
+
+\begin{answer}
+\begin{align*}
+V(a_t,\epsilon_{1t},\epsilon_{0t}; \mu, R)  =   \max \{  & R+\epsilon_{1t} + \beta \mathbb{E}[V(1,\epsilon_{1t+1}\epsilon_{0t+1}; \mu,R)|\epsilon_{1t},\epsilon_{0t}]) , \\ & \mu a_t +\epsilon_{0t} + \beta \mathbb{E}[V(\min\{a_t+1, 5\},\epsilon_{1t+1}, \epsilon_{0t+1}; \mu,R)|\epsilon_{1t},\epsilon_{0t}])\} 
+\end{align*}
+
+By conditional independence  and i.i.d.
+
+\begin{align*}
+V(a,\epsilon_{1},\epsilon_{0}; \mu, R)  =   \max \{  & R+\epsilon_{1} + \beta \mathbb{E}[V(1,\epsilon_{1}\epsilon_{0}; \mu,R)]) , \\ & \mu a +\epsilon_{0} + \beta \mathbb{E}[V(\min\{a+1, 5\},\epsilon_{1}, \epsilon_{0}; \mu,R)])\} 
+\end{align*}
+By definition of conditional value function 
+%Note that $\mathbb{E}[V(1,\epsilon_{1t+1}\epsilon_{0t+1}; \mu,R)|\epsilon_{1t},\epsilon_{0t}]) = $
+
+%$\bar{V}_1() = R + \beta E[]$
+
+\begin{align}
+    \bar{V}_1(a; \theta) &= R + \beta \overline{V}(1; \theta)\\ 
+    \bar{V}_0(a; \theta) &= \mu a + \beta \overline{V}(\min\{a + 1, 5\}; \theta)
+\end{align}
+Thus, the Bellman equation becomes
+\begin{equation}
+    V(a, \epsilon_0, \epsilon_1; \theta) = \max\{ \bar{V}_1(a; \theta) + \epsilon_1, \bar{V}_0(a; \theta) + \epsilon_0\}
+\end{equation}
+
+\end{answer}
+
+
+
+\item \textbf{Contraction Mapping:} Solve this dynamic programming problem through
+value function iteration given parameter values $(\mu, R) = (-1, -3)$. Assume $\beta = 0.9$. The mapping should iterate on the two choice-specific
+conditional value functions. Recall that the logit-error assumption implies an analytic solution to the expectation of the max in these equations (the ``logsum'' formula), and that Euler’s constant is approximately 0.5775. 
+
+Suppose $a_t = 2$. For what value of $\epsilon_{0t} -\epsilon_{1t}  $ is the firm indifferent between replacing its machine and not? What is the probability (to an econometrician who doesn’t observe the $\epsilon$ draws) that this firm will replace its machine? What is the value of a firm at state
+$\{a_t = 4, \epsilon_{0t} = 1, \epsilon_{1t} = 1.5\}$?
+
+\begin{answer}
+
+Applying the logsum transformation, we obtain 
+\[
+ E\left[ \max_{i \in \{0, 1\}}[ \bar{V}_i(a; \theta) + \epsilon_i] \right] = \ln\left[ \exp \bar{V}_1(a) + \exp \bar{V}_0(a) \right] + \gamma 
+\]
+where $\gamma$ is Euler's constant. Thus, we have 
+\begin{equation}
+    E[V(a, \epsilon_0, \epsilon_1; \theta)] = \ln \left[ 
+    \exp( R + \beta E[V(a, 1; \theta)]) + 
+    \exp(\mu a + \beta E[V(\min\{a + 1, 5\}; \theta)])
+    \right] + \gamma. 
+\end{equation}
+
+Now we solve for the two choice-specific conditional value functions. From above, this implies: 
+\begin{align*}
+    \bar{V}_1(a; \theta) &= R + \beta \ln \left[
+        \exp(\bar{V}_1(1)) + \exp(\bar{V}_0(1))
+    \right] + \beta \gamma \\ 
+    \bar{V}_0(a; \theta) &= \mu a + \beta \ln \left[
+        \exp(\bar{V}_1(\min\{a + 1, 5\})) + \exp(\bar{V}_0(\min\{a + 1, 5\}))
+    \right] + \beta \gamma
+\end{align*}
+
+
+Finally, for $a_t = 2$, the firm is indifferent between replacing and not replacing when $\bar{V}_1(2) + \epsilon_{1,t} - \bar{V}_0(2) + \epsilon_{0t}$, i.e., when 
+\[
+\epsilon_{0t} - \epsilon_{1t} = \bar{V}_1(2) - \bar{V}_0(2)  \approx 0.114.
+\]
+The probability of replacing (to the econometrician) is given as: 
+\[
+P(i_t = 1 \mid a_t = 2) = \frac{\exp(\bar{V}_1(2))}{\exp(\bar{V}_1(2)) + \exp(\bar{V}_0(2))} \approx 0.529.
+\]
+Finally, the value of a firm at $\{a_t = 4, \epsilon_{0t} = 1, \epsilon_{1t}\}$ is 
+\[
+V(4, 1, 1.5) = \max\{\bar{V}_0(4) + 1, \bar{V}_1(4) + 1.5\} \approx -9.903.
+\]
+
+%Evaluating at the desired parameters, we have 
+% \[
+% E[V(a; \theta)] = \ln \left[ 
+%     \exp(-3 + 0.9 E[V(1; \theta)]) + 
+%     \exp(-a + 0.9 E[V(\min\{a + 1, 5\}; \theta)])
+%     \right] + 0.5775. 
+% \]
+
+\end{answer}
+
+
+
+\item \textbf{Simulate Data:} Generate a dataset of observable states $a_t$ and choices $i_t $ for $T = 20,000$ periods from the model in (3). Note that cross-sectional and longitudinal data points are perfect substitutes here.
+
+\begin{answer}
+    Implemented in \texttt{run\_data\_simulation} function in code. 
+\end{answer}
+
+
+\item Use the data from (4) to estimate $\theta$ using Rust's NFP approach. 
+
+\begin{enumerate}
+\item Start with a guess of $\theta$. 
+
+\item Solve for the choice-specific conditional value functions $\bar{V}_0(., \theta)$ and $\bar{V}_1(., \theta)$ using contraction mapping. 
+
+\item Plug the $\bar{V}_0(., \theta)$ and $\bar{V}_1(., \theta)$  in the logit discrete choice formula to construct likelihood $P(a_t; \theta)$. 
+
+\item Search over $\theta$ to maximise the likelihood objective function.
+
+\end{enumerate}
+
+\begin{answer}
+    Implemented in \texttt{MachineReplacementEstimation} class in code. 
+\end{answer}
+
+
+\item Estimate $\theta$ using Hotz and Miller’s CCP approach. Below is guidance on how to estimate $\theta$ using analytical formulas (covered in the recitation) and forward simulation (covered in the lecture). You can use either. 
+
+\begin{answer}
+We implement both approaches and compare the results
+\end{answer}
+\begin{enumerate}
+\item Estimate the replacement probabilities at each state $\hat{P}(.)$ using the average replacement rate in the sample. (These estimates are non-parametric estimates of the replacement probabilities.)
+
+\begin{answer}
+    Implemented in \texttt{get\_replacement\_prob} function in code. 
+\end{answer}
+
+\item \textbf{Analytical Formula:} Express $\bar{V}_1(., \theta) - \bar{V}_0(., \theta)$ as a function of $P(.; \theta)$ by following the steps below.
+\begin{enumerate}
+\item Write out the expression for $\bar{V}_1(a_t, \theta) - \bar{V}_0(a_t, \theta)$ in terms of differences in current flow utilities and continuation values.
+
+\begin{answer}
+Using equations (1) and (2), we have
+\begin{equation} \overline{V}_1(a_t, \theta) - \overline{V}_0(a_t, \theta) =R - \mu a_t + \beta \left( \overline{V}(1, \theta) -\overline{V}(\min\{a+1,5\}; \theta) \right)\end{equation}
+\end{answer}
+
+\item Write down the Arcidiacono-Miller inversion formula for this model. That is, write $V(a_t, \theta) - \bar{V}_1(a_t, \theta)$ as a function of $P(a_t; \theta)$. 
+
+\begin{answer}
+
+
+From the logit discrete choice formula, we have 
+$$P(i_{t}=1|a_{t}) = \frac{\exp(\overline{V}_1(a_t;\theta))}{\exp(\overline{V}_1(a_t;\theta))+\exp(\overline{V}_0(a_t;\theta))}$$
+
+So, using (5), we have $$ \overline{V}_1(a_t,\theta) -  \ln (P(i_t=1|a_t))
+ = V(a_t;\theta) - \gamma $$
+
+ implying (using shorthand notation $P(a_t)=P(i_t=1|a_t)$)
+ \begin{equation} V(a_t, \theta) - \overline{V}_1(a_t, \theta)   =  \gamma - \ln(P(a_t))  \end{equation}
+
+
+\end{answer}
+
+\item Replace the continuation values $V(a_{t+1}(a_t, i_t); \theta)$ in (i) with expressions (in terms of $\bar{V}_1(a_{t+1}(a_t, i_t); \theta)$ and $P(a_{t+1}(a_t, i_t); \theta))$ from the inversion formula. 
+
+
+\begin{answer}
+Plugging (6) into (5) yields
+\begin{align*}
+    \overline{V}_1(a_t, \theta) - \overline{V}_0(a_t, \theta) &=R - \mu a_t + \beta \left( V(1, \theta) -V(\min\{a_t+1,5\}; \theta) \right) \\ 
+    &=R - \mu a_t + \beta \Big( \gamma - \ln P(a_t) + \overline{V}_1(1,\theta) - \gamma \\
+    &\quad + \ln P(\min\{a_t+1, 5\}) -\overline{V}_1(\min\{a_t+1,5\}; \theta) \Big) \\ 
+    &=R - \mu a_t + \beta \left( \ln P(\min\{a_t+1, 5\}) - \ln P(1)) + \overline{V}_1(1,\theta)  -\overline{V}_1(\min\{a_t+1,5\}; \theta) \right).
+\end{align*}
+
+
+
+Note $\overline{V}_1(1,\theta)  -\overline{V}_1(\min\{a+1,5\}; \theta) = 0$ from (1) (the conditional value function for the replacement action doesn't depend on age), so we're left with $$\overline{V}_1(a_t, \theta) - \overline{V}_0(a_t, \theta) = \boxed{R - \mu a_t + \beta  \left( \ln P(\min\{a_t+1, 5\}) - \ln P(1)) \right)}    $$
+\end{answer}
+\item Express $\bar{V}_1(a_{t+1}(a_t, 1); \theta)$ and $\bar{V}_1(a_{t+1}(a_t, 0); \theta)$ as sums of period $t+1$ flow pay-off and continuation values. Differencing will
+make continuation value terms drop out because
+\[
+a_{t+2}(a_{t+1}( (a_t, 1)), 1) = a_{t+2}(a_{t+1}( (a_t, 0)), 1).
+\]
+\end{enumerate}
+Plug-in the estimated replacement probabilities $\hat{P}(.)$ in the analytic formula for $\bar{V}_1(., \theta) - \bar{V}_0(., \theta)$
+
+\begin{answer}
+Subsumed in (iii).
+\end{answer}
+\item \textbf{Forward Simulation:} Compute $\bar{V}_0(., \theta)$ and $\bar{V}_1(., \theta)$ given estimated replacement probabilities.
+\begin{enumerate}
+    \item Write down the conditional state transition matrices $F_0$ and $F_1$ (of $5\times 5$ dimension), which represent the transition probabilities of the state conditional on the $\{0, 1\}$ replacement choice. (Note that the law of motion is deterministic in this case, hence, $F_0$ and $F_1$ will be populated by 1s and 0s). 
+
+\begin{answer}
+$$F_0 = 
+\begin{pmatrix}
+0 & 1 & 0 & 0 & 0 \\
+0 & 0 & 1 & 0 & 0 \\ 
+0 & 0 & 0 & 1 & 0 \\ 
+0 & 0 & 0 & 0 & 1 \\ 
+0 & 0 & 0 & 0 & 1
+\end{pmatrix}
+$$
+
+$$F_1 = 
+\begin{pmatrix}
+1 & 0 & 0 & 0 & 0 \\
+1 & 0 & 0 & 0 & 0 \\ 
+1 & 0 & 0 & 0 & 0 \\ 
+1 & 0 & 0 & 0 & 0 \\ 
+1 & 0 & 0 & 0 & 0
+\end{pmatrix}
+$$
+\end{answer}
+  %  \item Using the estimated replacement probabilities and the $F_0$ and $F_1$ matrices, calculate the unconditional state transition matrix (of $5\times 5$ dimension). This unconditional matrix accounts for both the probability of replacement and the transition probabilities.
+
+%\begin{answer}
+
+%$$P(a_{t+1}|a_t) = P(a_{t+1}|a_t,i_{t}=0)P(i_t=0|a_t) + P(a_{t+1}|a_t,i_{t}=1)P(i_t=1|a_t) $$
+
+%$$F = F_0 (1- \hat{p}) + F_1\hat p$$
+
+%\end{answer}
+
+    \item Write a procedure that (forward) simulates $\bar{V}_0(.,\theta)$ and $\bar{V}_1(.,\theta)$ using estimated replacement probabilities and unconditional transition probabilities.
+
+    \begin{answer}
+    Note that we can expand the conditional value functions as follows: 
+    \begin{align*}
+    \overline{V}_i(a; \theta) & = \overline{u}_i(a;\theta) +  \beta \mathbb{E} [V(a^{\prime};\theta) |a,i,\theta] \\
+    &=\overline{u}_i(a;\theta)+\beta \mathbb{E} [ \overline{u}_{i^\prime}(a^\prime|\theta) + \epsilon_{i^\prime} +\beta \mathbb{E}[V(a^{\prime \prime};\theta)|a^\prime , i^\prime, \theta]]   |a,i,\theta] \\& = 
+    \overline{u}_i(a;\theta)+\beta \mathbb{E} [ \overline{u}_{i^\prime}(a^\prime|\theta)|a,i,\theta] + \beta \mathbb{E}[\epsilon_{i^\prime}|a,i,\theta] +\beta^2  \mathbb{E} [\mathbb{E}[V(a^{\prime \prime};\theta)|a^\prime , i^\prime, \theta]   |a,i,\theta] \end{align*}
+
+Let's analyze every term in this expression. The first term $\overline{u}_i(a;\theta)$ we can calculate for $i=0,1$ since the initial age $a=1$. The second term, $\mathbb{E}[\overline{u}_i^\prime(a^\prime|\theta), a, i , \theta]$ can be estimated via simulation. Note that this is an average over two random variables: $a^\prime$, tomorrow's age, and $i^\prime$, tomorrow's action choice (replace or don't replace). By iterated expectations, we can first sample tomorrow's investment choice given today's investment choice, by drawing from the distribution $F(i^\prime |i,a,\theta)$. By conditional independence, this is the same as $F(i^\prime |a,\theta)$, so it suffices to use our non-parametric estimates of replacement probabilities by age $\hat{P}(\cdot)$ here (note that this is constant for  $F(i^\prime |a,\theta)$ at the true $\theta$, but not at any other $\theta$; this is the sense in which we have a ``pseudo"-likelihood). Then, we can sample age from the distribution $F(a^\prime |a,i^\prime, i,\theta)$; this does not depend on $\theta$ and depends only on the most recent investment choice, so we can use $F_0,F_1$ here.  
+
+The next term is $\mathbb{E}[\epsilon_{i^\prime}|a,i,\theta]$ where $\epsilon_{\prime^i}$ is the error term of the action $i^\prime$ that maximizes utility at $t=2$. In the logit case, this has a simple formula: $\gamma - \ln(P(i^\prime|a))$ and we already have a nonparametric estimate of that for each $a$ via the replacement probabilities.
+
+The last term is the expected continuation value. We can simply apply an analogous procedure that we used in our first expansion but sampling conditional on our sampled first period action and investment to get simulation second period action and investment, and so on and so forth for the remaining periods in our finite time horizon. Averaging across these simulations, by linearity of expectations, gives us an estimate of hte value function. In addition, because in this problem the parameters $\mu, R$ enter linearly into the value functions, we can first take all of our simulation draws and form the average, and then apply each conjectured $\mu, R$ to the average draws to estimate the conditional value functions. This is the approach we take in our code. 
+    %Because the conditional value functions assume the first period action, the expectation of today's continuation value must condition the transition probabilities on the action. However, in all further periods, we can simply consider the unconditional expectation of the continuation value and forward simulate the term $\mathbb{E}(V(a^{\prime \prime}; \theta)|a^\prime,, \theta]$
+    %Furthermore,  the term $\mathbb{E}(V(a^\prime;\theta)|a^\prime ,\theta]$ can be forward simulated as follows  
+
+        %\begin{align*}
+    %\overline{V}(a^{\prime \prime};\theta)|a^\prime ,\theta] & = \sum_{i \in 0,1}\ \left(\mathbb{P}(i|a^\prime)u_i(a^{\prime \prime},\theta) + \mathbb{E}[\epsilon_{i}|i,a^{\prime} , \theta ]\right) + \beta \mathbb{E}[\overline{V}(a^{\prime \prime \prime}; \theta)|a^{\prime \prime}, \theta]
+    %\end{align*}
+
+    %Let's do this slowly. We have 
+
+    %\begin{equation}
+    %V(a, \epsilon_0, \epsilon_1; \theta) = \max\{ %\bar{V}_1(a; \theta) + \epsilon_1, %\bar{V}_0(a; \theta) + \epsilon_0\}
+%\end{equation}
+
+%where 
+
+
+%\begin{align*}
+    %\bar{V}_1(a; \theta) &= R + \beta \mathbb{E}[V(1; \theta)]\\ 
+   % \bar{V}_0(a; \theta) &= \mu a + \beta \mathbb{E}[V(\min\{a + 1, 5\}; \theta)] 
+%\end{align*}
+
+ %So, 
+
+     %\begin{equation*}
+    %V(a, \epsilon_0, \epsilon_1; \theta) = \max\{ R + \beta \mathbb{E}[V(1; \theta) + \epsilon_1, \mu a + \beta \mathbb{E}[V(\min\{a + 1, 5\}; \theta) + \epsilon_0\}
+%\end{equation*}
+
+%So $\mathbb{E}[V(a,\epsilon_0,\epsilon_1;\theta) = Pr(i=1|a,\theta)\times (R+\beta\mathbb{E}V(1,\theta) + E\epsilon_1)+Pr(i=0|a,\theta)\times (R+\beta \mathbb{E}(V($
+    %\end{answer}
+
+\end{answer}
+
+\end{enumerate}
+\item Once you have $\bar{V}_1(., \theta) - \bar{V}_0(., \theta)$, proceed as in (5) - c,d. 
+
+\begin{answer}
+
+Figure 1 shows our results comparing our three procedures: Nested Fixed Point (Rust), Analytical Formula (Arcidiacano-Miller), and Forward Simulation. The results are very consistent across approach, with slightly less precision in the forward simulation exercise, perhaps due to simulation bias (we use 1,000 simulation draws since sampling from a Markov chain of 20,000 periods is already somewhat time-consuming, even when the procedure is vectorized over simulation draws, as it is in our code). 
+
+\begin{figure}[h]
+\centering
+\caption{Results Across Estimation Methods}
+\begin{tabular}{l|rrr} & Nested Fixed Point & Arcidiacono-Miller & Forward Simulation\\\hline
+$\hat{\mu}$ & -0.989 & -0.993 & -1.094 \\
+$\hat{R}$ & -2.984 & -2.996 & -2.985 \\
+\end{tabular}
+\end{figure}
+\end{answer}
+
+\end{enumerate}
+
+\end{enumerate}
+
+
+\end{document}

@@ -88,11 +88,11 @@ class DiamondModel:
             instruments=self.instruments_interact,
         ).fit()
 
-        self.est_params["alpha_HH"] = IV_reg_H.params.iloc[0]
-        self.est_params["alpha_HL"] = IV_reg_H.params.iloc[1]
+        self.est_params["alpha_HH"] = IV_reg_H.params.iloc[1]
+        self.est_params["alpha_HL"] = IV_reg_H.params.iloc[2]
 
-        self.est_params["gamma_HH"] = IV_reg_H.params.iloc[2]
-        self.est_params["gamma_HL"] = IV_reg_H.params.iloc[3]
+        self.est_params["gamma_HH"] = IV_reg_H.params.iloc[3]
+        self.est_params["gamma_HL"] = IV_reg_H.params.iloc[4]
 
         IV_reg_L = IV2SLS(
             dependent=df["Log_Wage_L"],
@@ -101,10 +101,10 @@ class DiamondModel:
             instruments=self.instruments_interact,
         ).fit()
 
-        self.est_params["alpha_LH"] = IV_reg_L.params.iloc[0]
-        self.est_params["alpha_LL"] = IV_reg_L.params.iloc[1]
-        self.est_params["gamma_LH"] = IV_reg_L.params.iloc[2]
-        self.est_params["gamma_LL"] = IV_reg_L.params.iloc[3]
+        self.est_params["alpha_LH"] = IV_reg_L.params.iloc[1]
+        self.est_params["alpha_LL"] = IV_reg_L.params.iloc[2]
+        self.est_params["gamma_LH"] = IV_reg_L.params.iloc[3]
+        self.est_params["gamma_LL"] = IV_reg_L.params.iloc[4]
 
     def _housing_supply_parameters(self) -> np.ndarray:
         """

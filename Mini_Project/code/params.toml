@@ -1,5 +1,5 @@
 ####### Parameters 
-J = 50
+J = 100
 edu_types = ["H","L"]
 race_types = ["White","Black"]
 

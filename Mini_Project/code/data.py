@@ -50,7 +50,7 @@ class DiamondData:
         city_data = {
             "City": np.arange(self.params["J"]),
             "State": self.city_state,
-            "P_Same_State": self.prob_same_state,
+            "P_Same_State": self.prob_from_state,
             "Population": self.population,
             "Log_Wage_H": self.wage_H,
             "Log_Wage_L": self.wage_L,
@@ -86,8 +86,8 @@ class DiamondData:
         self.city_state = np.random.randint(
             1, self.params["NUM_STATES"] + 1, size=self.params["J"]
         )
-        self.prob_same_state = np.random.uniform(0, 1, size=self.params["J"])
-        self.prob_same_state = self.prob_same_state / np.sum(self.prob_same_state)
+        self.prob_from_state = np.random.uniform(0, 1, size=self.params["J"])
+        self.prob_from_state = self.prob_from_state / np.sum(self.prob_from_state)
 
         ###### Housing Supply ######
         # Initialize housing supply shifters
@@ -180,8 +180,9 @@ class DiamondData:
             logger.warning("Fixed point did not converge.")
 
         wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq = np.split(sol.x, 4)
-        L_eq, H_eq, _, _, _, _ = self._find_equilibrium(
-            wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq
+
+        L_eq, H_eq, wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq = (
+            self._find_equilibrium(wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq)
         )
         self.L, self.H = L_eq, H_eq
         self.population = L_eq + H_eq
@@ -244,17 +245,31 @@ class DiamondData:
         """
         Calculate population for each group given delta.
         """
-        util_ss = np.exp(delta + beta_st[race])
-        prob_ss = util_ss / np.sum(util_ss)
 
-        util_nss = np.exp(delta)
-        prob_nss = util_nss / np.sum(util_nss)
+        pop = np.zeros(self.params["J"])
 
-        pop = (
-            self.total_population[(edu, race)] * self.prob_same_state * prob_ss
-            + self.total_population[(edu, race)] * (1 - self.prob_same_state) * prob_nss
-        )
+        tot_exp_delta = np.sum(np.exp(delta))
+        for j in range(self.params["J"]):
+            tot_exp_delta_mj = tot_exp_delta - np.exp(delta[j])
 
+            # Share of individuals from this state that will choose to live there
+            pop[j] += (
+                self.prob_from_state[j]
+                * np.exp(delta[j] + beta_st[race])
+                / (np.exp(delta[j] + beta_st[race]) + tot_exp_delta_mj)
+            )
+
+            # Share of individuals from other states that will choose to live here
+            for n in range(self.params["J"]):
+                tot_exp_delta_mn = tot_exp_delta - np.exp(delta[n])
+                if n != j:
+                    pop[j] += (
+                        (self.prob_from_state[n])
+                        * np.exp(delta[j])
+                        / (np.exp(delta[n] + beta_st[race]) + tot_exp_delta_mn)
+                    )
+
+        pop = pop * self.total_population[(edu, race)]
         return pop
 
     def _calculate_population(self, wage, rent, amenity_endog, edu="H"):

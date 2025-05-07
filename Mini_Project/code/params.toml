@@ -37,8 +37,8 @@ White = 0.6
 Black = 0.4
 
 [beta_st]
-White = 0.2
-Black = 0.5
+White = 0.5
+Black = 0.2
 
 [beta_w]
 White = 0.6
@@ -61,43 +61,43 @@ N = 20
 # Housing Demand Instruments
 [Z_H]
 mu = 0 
-sigma = 1
+sigma = 0.1
 
 [Z_L]
 mu = 0
-sigma = 1
+sigma = 0.1
 
 # Housing supply 
 [x_geo]
 mu = 0 
-sigma = 1 
+sigma = 0.1 
 
 [x_reg]
 mu = 0
-sigma = 1
+sigma = 0.1
 
 [CC]
 mu = 0
-sigma = 1
+sigma = 0.1
 
 # Amenities
 [x]
 mu = 0
-sigma = 1 
+sigma = 0.1 
 
 [a]
 mu = 0
-sigma = 1
+sigma = 0.1
 
 ###### Un-Observables
 [epsilon_H]
 mu = 2
-sigma = 1
+sigma = 0.1
 
 [epsilon_L]
 mu = 1
-sigma = 1
+sigma = 0.1
 
 [epsilon_a]
 mu = 0
-sigma = 1
+sigma = 0.1

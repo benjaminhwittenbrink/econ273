@@ -6,6 +6,7 @@ import logging
 import toml
 from importlib import reload
 import pickle
+import matplotlib.pyplot as plt
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +15,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# %%
 reload(data)
 reload(estimate)
 
@@ -54,13 +54,13 @@ print("variables.tex has been generated!")
 # %%
 default_seed = 273
 N_iters = 1
-# %%
+
 for s in [default_seed + i for i in range(N_iters)]:
     logging.info(f"Simulating with seed {s}.")
     DD = data.DiamondData(params, seed=s)
     DD.simulate()
     DD.write()
-
+df = DD.to_dataframe()
 
 # %%
 reload(estimate)
@@ -68,6 +68,6 @@ DM = estimate.DiamondModel(DD, seed=default_seed, verbose=True)
 DM.initialize()
 
 # %%
-DM.fit()
+DM.fit(theta0=[0.3, 0.3])
 
 # %%

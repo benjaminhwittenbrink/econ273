@@ -47,14 +47,16 @@ class DiamondModel:
         Create instruments for the GMM estimation.
         """
         self.data = self.data.assign(
-            Z_H_reg=lambda x: x["Z_H"] * x["Regulatory_Constraint"],
-            Z_H_geo=lambda x: x["Z_H"] * x["Geographic_Constraint"],
-            Z_L_reg=lambda x: x["Z_L"] * x["Regulatory_Constraint"],
-            Z_L_geo=lambda x: x["Z_L"] * x["Geographic_Constraint"],
+            log_Z_H=lambda x: np.log(x["Z_H"]),
+            log_Z_L=lambda x: np.log(x["Z_L"]),
+            Z_H_reg=lambda x: np.log(x["Z_H"]) * x["Regulatory_Constraint"],
+            Z_H_geo=lambda x: np.log(x["Z_H"]) * x["Geographic_Constraint"],
+            Z_L_reg=lambda x: np.log(x["Z_L"]) * x["Regulatory_Constraint"],
+            Z_L_geo=lambda x: np.log(x["Z_L"]) * x["Geographic_Constraint"],
         )
 
         self.instruments = self.data[
-            ["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
+            ["log_Z_H", "log_Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
         ]
 
     # -------------------------------------------------------------------------

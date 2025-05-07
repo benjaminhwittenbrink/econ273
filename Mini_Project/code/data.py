@@ -82,7 +82,7 @@ class DiamondData:
         """
 
         ###### Randomly assign cities to states ######
-        self.prob_from_state = np.random.uniform(0, 1, size=self.params["J"])
+        self.prob_from_state = np.random.gamma(2, 2, size=self.params["J"])
         self.prob_from_state = self.prob_from_state / np.sum(self.prob_from_state)
 
         ###### Housing Supply ######
@@ -131,10 +131,6 @@ class DiamondData:
         }
 
         ###### Amenities ######
-        self.amenity_endog = np.random.lognormal(
-            self.params["a"]["mu"], self.params["a"]["sigma"], self.params["J"]
-        )
-
         self.amenity_exog = np.random.lognormal(
             self.params["x"]["mu"], self.params["x"]["sigma"], self.params["J"]
         )
@@ -237,7 +233,7 @@ class DiamondData:
 
         return L, H, wage_L, wage_H, rent, amenity_endog
 
-    def _calculate_group_population(self, delta, edu, race, beta_st):
+    def _calculate_group_population(self, delta, edu, race, beta_st, prob):
         """
         Calculate population for each group given delta.
         """
@@ -245,16 +241,16 @@ class DiamondData:
         pop = np.zeros(self.params["J"])
 
         exp_d = np.exp(delta)
-        exp_d_beta = np.exp(delta + beta_st[race])
+        exp_d_beta = np.exp(delta + beta_st)
         tot_exp_d = exp_d.sum()
 
         denom = exp_d_beta + (tot_exp_d - exp_d)
 
         # Share of individuals from this state that will choose to live there
-        term1 = self.prob_from_state * exp_d_beta / denom
+        term1 = prob * exp_d_beta / denom
 
         # Share of individuals from other states that will choose to live there
-        prob_over_denom = self.prob_from_state / denom  # p_n / D_n
+        prob_over_denom = prob / denom  # p_n / D_n
         sum_prob_over_denom = prob_over_denom.sum()  # Σ_n p_n / D_n
         term2 = exp_d * (sum_prob_over_denom - prob_over_denom)
 
@@ -274,7 +270,11 @@ class DiamondData:
             self.delta[(edu, race)] = delta
 
             pop = self._calculate_group_population(
-                delta, edu, race, beta_st=self.params["beta_st"]
+                delta,
+                edu,
+                race,
+                beta_st=self.params["beta_st"],
+                prob=self.prob_from_state,
             )
             self.city_population[(edu, race)] = pop
             tot_pop += pop

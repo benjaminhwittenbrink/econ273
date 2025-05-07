@@ -6,6 +6,7 @@ from tqdm import tqdm
 from typing import List, Dict, Tuple, Any
 from linearmodels.iv.model import IV2SLS
 import statsmodels.api as sm
+import matplotlib.pyplot as plt
 
 import utils
 
@@ -18,14 +19,15 @@ class DiamondModel:
 
     def __init__(
         self,
-        data: DiamondData,
+        df: pd.DataFrame,
+        DD: DiamondData,
         seed: int = 123,
         verbose: bool = True,
     ):
         self.rng = np.random.default_rng(seed)
 
-        self.DD = data
-        self.data = data.to_dataframe()
+        self.DD = DD
+        self.data = df
 
         self.data["Log_H"] = np.log(self.data["High_Ed_Population"])
         self.data["Log_L"] = np.log(self.data["Low_Ed_Population"])
@@ -47,17 +49,23 @@ class DiamondModel:
         Create instruments for the GMM estimation.
         """
         self.data = self.data.assign(
-            log_Z_H=lambda x: np.log(x["Z_H"]),
-            log_Z_L=lambda x: np.log(x["Z_L"]),
+            Log_Z_H=lambda x: np.log(x["Z_H"]),
+            Log_Z_L=lambda x: np.log(x["Z_L"]),
             Z_H_reg=lambda x: np.log(x["Z_H"]) * x["Regulatory_Constraint"],
             Z_H_geo=lambda x: np.log(x["Z_H"]) * x["Geographic_Constraint"],
             Z_L_reg=lambda x: np.log(x["Z_L"]) * x["Regulatory_Constraint"],
             Z_L_geo=lambda x: np.log(x["Z_L"]) * x["Geographic_Constraint"],
         )
 
-        self.instruments = self.data[
-            ["log_Z_H", "log_Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
+        self.instruments_full = self.data[
+            ["Log_Z_H", "Log_Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
         ]
+        # self.instruments = self.data[["Log_Z_H", "Log_Z_L"]]
+        self.instruments = self.instruments_full.copy()
+        self.instruments_interact = self.data[
+            ["Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]
+        ]
+        self.instruments_sub = self.data[["Log_Z_H", "Log_Z_L"]]
 
     # -------------------------------------------------------------------------
     #  Moment-condition builders  (TODO:)
@@ -75,23 +83,28 @@ class DiamondModel:
 
         IV_reg_H = IV2SLS(
             dependent=df["Log_Wage_H"],
-            exog=None,
+            exog=sm.add_constant(df[["Log_Z_H", "Log_Z_L"]]),
             endog=df[["Log_H", "Log_L"]],
-            instruments=self.instruments,
+            instruments=self.instruments_interact,
         ).fit()
 
-        self.est_params["gamma_HH"] = IV_reg_H.params.iloc[0]
-        self.est_params["gamma_HL"] = IV_reg_H.params.iloc[1]
+        self.est_params["alpha_HH"] = IV_reg_H.params.iloc[0]
+        self.est_params["alpha_HL"] = IV_reg_H.params.iloc[1]
+
+        self.est_params["gamma_HH"] = IV_reg_H.params.iloc[2]
+        self.est_params["gamma_HL"] = IV_reg_H.params.iloc[3]
 
         IV_reg_L = IV2SLS(
             dependent=df["Log_Wage_L"],
-            exog=None,
+            exog=sm.add_constant(df[["Log_Z_H", "Log_Z_L"]]),
             endog=df[["Log_H", "Log_L"]],
-            instruments=self.instruments,
+            instruments=self.instruments_interact,
         ).fit()
 
-        self.est_params["gamma_LH"] = IV_reg_L.params.iloc[0]
-        self.est_params["gamma_LL"] = IV_reg_L.params.iloc[1]
+        self.est_params["alpha_LH"] = IV_reg_L.params.iloc[0]
+        self.est_params["alpha_LL"] = IV_reg_L.params.iloc[1]
+        self.est_params["gamma_LH"] = IV_reg_L.params.iloc[2]
+        self.est_params["gamma_LL"] = IV_reg_L.params.iloc[3]
 
     def _housing_supply_parameters(self) -> np.ndarray:
         """
@@ -119,7 +132,7 @@ class DiamondModel:
             dependent=df["Log_Rent"],
             exog=np.ones((len(df), 1)),
             endog=endog,
-            instruments=self.instruments,
+            instruments=self.instruments_full,
         ).fit()
 
         self.est_params["iota"] = np.exp(IV_reg.params.iloc[0])
@@ -144,6 +157,56 @@ class DiamondModel:
 
         self.est_params["phi_a"] = IV_reg.params.iloc[0]
 
+    def _estimate_2sls(self, delta_hat, df, zeta, race="White"):
+        # stack high‑ and low‑education observations
+        y_H = delta_hat[("H", race)]
+        y_L = delta_hat[("L", race)]
+        y = np.concatenate([y_H, y_L])
+
+        # construct regressors
+        X_H = df.Log_Wage_H - (zeta * df.Log_Rent)
+        X_L = df.Log_Wage_L - (zeta * df.Log_Rent)
+        A_H = df.Amenity_Endog
+        A_L = df.Amenity_Endog
+
+        X = pd.concat(
+            [
+                pd.DataFrame({"wage_diff": X_H, "amenity": A_H}),
+                pd.DataFrame({"wage_diff": X_L, "amenity": A_L}),
+            ]
+        )
+
+        # Add fixed effects to control for level differences by skill groups (since delta is identified up to a constant)
+        FE = pd.concat(
+            [
+                pd.DataFrame({"FE1": np.ones(len(y_H)), "FE2": np.zeros(len(y_L))}),
+                pd.DataFrame({"FE1": np.zeros(len(y_H)), "FE2": np.ones(len(y_L))}),
+            ]
+        )
+
+        X = pd.concat([X, FE], axis=1)
+
+        # instruments: just repeat the same instrument matrix for H and L
+        Z = pd.concat([self.instruments, self.instruments])
+
+        # run 2SLS:
+        res_IV = IV2SLS(
+            dependent=y,
+            exog=X[["FE1", "FE2"]],
+            endog=X[["wage_diff", "amenity"]],
+            instruments=Z,
+        ).fit()
+
+        # Get residuals for moment conditions
+        res = sm.OLS(y, X).fit()
+        g = np.mean(res.resid.to_numpy()[:, None] * Z, axis=0)
+
+        return (
+            res_IV.params.iloc[2],
+            res_IV.params.iloc[3],
+            g,
+        )
+
     def _labor_supply_parameters(self, delta_hat: np.ndarray) -> np.ndarray:
         """
         Run 2SLS regression to get labor supply parameters:
@@ -152,35 +215,17 @@ class DiamondModel:
 
         df = self.data
         zeta = self.params["zeta"]
+        moments = []
 
         for race in self.params["race_types"]:
+            beta_w, beta_a, g = self._estimate_2sls(delta_hat, df, zeta, race=race)
+            moments.append(g)
 
-            def objective(params, race="White"):
-                beta_w, beta_a = params
-                # Get residuals from both high and low education
-                res_H = (
-                    delta_hat[("H", race)]
-                    - (df.Log_Wage_H - zeta * df.Log_Rent) * beta_w
-                    - df.Amenity_Endog * beta_a
-                )
-                res_L = (
-                    delta_hat[("L", race)]
-                    - (df.Log_Wage_L - zeta * df.Log_Rent) * beta_w
-                    - df.Amenity_Endog * beta_a
-                )
-
-                # Moment conditions
-                moment_H = np.mean(res_H.to_numpy()[:, None] * self.instruments, axis=0)
-                moment_L = np.mean(res_L.to_numpy()[:, None] * self.instruments, axis=0)
-                xi = np.concatenate([moment_H, moment_L])
-                return np.dot(xi, xi)
-
-            # Minimize residuals
-            res = minimize(objective, [0.1, 0.1], args=(race,))
-            beta_w, beta_a = res.x
             # save
             self.est_params[f"beta_w_{race}"] = beta_w
             self.est_params[f"beta_a_{race}"] = beta_a
+
+        return np.concatenate(moments)
 
     # -------------------------------------------------------------------------
     # BLP inner loop  (share inversion)
@@ -190,14 +235,16 @@ class DiamondModel:
     ):
         delta = delta0.copy()
         for i in range(maxiter):
-            share_pred = self.DD._calculate_group_population(delta, edu, race, beta_st)
+            share_pred = self.DD._calculate_group_population(
+                delta, edu, race, beta_st, self.data["P_Same_State"].to_numpy()
+            )
             delta_new = delta + np.log(target_share) - np.log(share_pred)
             if np.max(np.abs(delta_new - delta)) < tol:
                 break
             delta = delta_new
 
         if i == maxiter - 1:
-            raise Warning(
+            logger.info(
                 f"Delta contraction mapping did not converge (max diff={np.max(np.abs(delta_new - delta))})."
             )
 
@@ -206,8 +253,7 @@ class DiamondModel:
     def _blp_inversion(self, beta_st: dict) -> np.ndarray:
         """
         Solve for delta hat that reproduces observed H/L shares, given nonlinear
-        preferences theta_N:
-            (zeta, beta_w_White, beta_w_Black, beta_a_White, beta_a_Black, beta_st_White, beta_st_Black, phi_a).
+        preferences beta_st
 
         Return
         ------
@@ -222,48 +268,26 @@ class DiamondModel:
                 d = self._invert_delta(
                     df[f"Pop_{edu}{race}"], delta0, edu, race, beta_st
                 )
-                d = d - np.mean(d)
                 delta_hat[(edu, race)] = d
 
         return delta_hat
 
     # -------------------------------------------------------------------------
-    # GMM housekeeping TODO:
+    # GMM housekeeping
     # -------------------------------------------------------------------------
     def _stack_moments(self, theta: np.ndarray) -> np.ndarray:
 
         df = self.data
 
-        beta_st = {"White": theta[0], "Black": theta[1]}
+        beta_st = theta[0]
         delta_hat = self._blp_inversion(beta_st)
-        zeta = self.params["zeta"]
 
         self._labor_demand_parameters()
         self._housing_supply_parameters()
         self._amenity_supply_parameters()
-        self._labor_supply_parameters(delta_hat)
+        moments = self._labor_supply_parameters(delta_hat)
 
-        # print(f"\n\nbeta_w_White: {self.est_params['beta_w_White']}")
-        # print(f"beta_w_Black: {self.est_params['beta_w_Black']}")
-        # print(f"beta_a_White: {self.est_params['beta_a_White']}")
-        # print(f"beta_a_Black: {self.est_params['beta_a_Black']}")
-        # print(f"beta_st_White: {theta[0]}")
-        # print(f"beta_st_Black: {theta[1]}")
-
-        moments = []
-        for edu in self.params["edu_types"]:
-            for race in self.params["race_types"]:
-                d = delta_hat[(edu, race)]
-                xi = (
-                    d
-                    - (df[f"Log_Wage_{edu}"] - zeta * df["Log_Rent"])
-                    * self.est_params[f"beta_w_{race}"]
-                    - df["Amenity_Endog"] * self.est_params[f"beta_a_{race}"]
-                )
-                g = np.mean(xi.to_numpy()[:, None] * self.instruments, axis=0)
-                moments.append(g)
-
-        return np.concatenate(moments)
+        return moments
 
     # Quadratic-form objective
     def _gmm_objective_fn(self, theta: np.ndarray, W: np.ndarray) -> float:
@@ -278,8 +302,8 @@ class DiamondModel:
 
     def fit(
         self,
-        theta0: np.ndarray = np.ones(2),
-        outer_options: Dict[str, Any] = None,
+        theta0: np.ndarray = np.ones(1),
+        outer_options: Dict[str, Any] = {"disp": False},
     ):
         """
         Two-step GMM: first W = I, then optimal W = (Sigma hat)^-1 with
@@ -296,6 +320,9 @@ class DiamondModel:
             phi, phi_geo, phi_reg
 
         """
+
+        method = "Nelder-Mead"  # "L-BFGS-B"  # "Powell" #
+
         # -- Step 1 --
         # W = identity matrix
         if self.verbose:
@@ -306,8 +333,9 @@ class DiamondModel:
             self._gmm_objective_fn,
             theta0,
             args=(W,),
-            method="Nelder-mead",
+            method=method,
             options=outer_options or {"disp": self.verbose},
+            bounds=[(0.1, np.inf)],
         )
         theta1 = res1.x
         g1 = self._stack_moments(theta1)
@@ -324,8 +352,9 @@ class DiamondModel:
             self._gmm_objective_fn,
             theta1,
             args=(W_opt,),
-            method="Nelder-mead",
+            method=method,
             options=outer_options or {"disp": self.verbose},
+            bounds=[(0, np.inf)],
         )
         theta2 = res2.x
         g2 = self._stack_moments(theta2)
@@ -334,6 +363,7 @@ class DiamondModel:
         self.theta = theta2
         self.W = W_opt
         self.g = g2
+        self.est_params["beta_st"] = theta2[0]
 
         # Compute VCV matrix ?
         logger.info("GMM estimation finished.")

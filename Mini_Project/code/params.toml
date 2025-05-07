@@ -1,6 +1,5 @@
 ####### Parameters 
-J = 20
-NUM_STATES = 10
+J = 50
 edu_types = ["H","L"]
 race_types = ["White","Black"]
 
@@ -28,21 +27,19 @@ phi_a = 0.5
 # Utility
 zeta = 0.8
 
+beta_st = 5
+
 [beta_x]  
 White = 0.3
 Black = 0.7
 
 [beta_a] 
-White = 0.6
-Black = 0.4
-
-[beta_st]
-White = 0.5
-Black = 0.2
+White = 0.3
+Black = 0.9
 
 [beta_w]
-White = 0.6
-Black = 0.5
+White = 0.9
+Black = 0.2
 
 # Demographics
 [H]
@@ -61,43 +58,39 @@ N = 20
 # Housing Demand Instruments
 [Z_H]
 mu = 0 
-sigma = 0.1
+sigma = 0.5
 
 [Z_L]
 mu = 0
-sigma = 0.1
+sigma = 0.5
 
 # Housing supply 
 [x_geo]
 mu = 0 
-sigma = 0.1 
+sigma = 0.5
 
 [x_reg]
 mu = 0
-sigma = 0.1
+sigma = 0.5
 
 [CC]
 mu = 0
-sigma = 0.1
+sigma = 0.01
 
 # Amenities
 [x]
 mu = 0
-sigma = 0.1 
-
-[a]
-mu = 0
-sigma = 0.1
+sigma = 0.01
 
 ###### Un-Observables
 [epsilon_H]
 mu = 2
-sigma = 0.1
+sigma = 0.01
 
 [epsilon_L]
 mu = 1
-sigma = 0.1
+sigma = 0.01
 
 [epsilon_a]
 mu = 0
-sigma = 0.1
+sigma = 0.01

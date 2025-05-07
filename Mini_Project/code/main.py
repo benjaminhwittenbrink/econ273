@@ -5,8 +5,8 @@ import os
 import logging
 import toml
 from importlib import reload
-import pickle
-import matplotlib.pyplot as plt
+from utils import *
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,19 +55,37 @@ print("variables.tex has been generated!")
 default_seed = 273
 N_iters = 1
 
-for s in [default_seed + i for i in range(N_iters)]:
+dfs = []
+for s in tqdm([default_seed + i for i in range(N_iters)]):
     logging.info(f"Simulating with seed {s}.")
-    DD = data.DiamondData(params, seed=s)
-    DD.simulate()
-    DD.write()
-df = DD.to_dataframe()
+    try:
+        DD = data.DiamondData(params, seed=s)
+        DD.simulate()
+        DD.write()
+        df = DD.to_dataframe()
+        dfs.append(df)
+    except Exception as e:
+        logging.error(f"Error with seed {s}: {e}")
+        continue
+
+if len(dfs) == 0:
+    raise ValueError("No successful simulations. Check the logs for errors.")
+
+df = pd.concat(dfs, ignore_index=True)
+
+# %% Plot descriptive stats
+plot_descriptive_stats(df)
 
 # %%
 reload(estimate)
-DM = estimate.DiamondModel(DD, seed=default_seed, verbose=True)
+DM = estimate.DiamondModel(df, DD, seed=default_seed, verbose=True)
 DM.initialize()
 
 # %%
-DM.fit(theta0=[0.3, 0.3])
+DM.fit(theta0=np.array([4]))
+
+print("=== Estimation Results ===")
+for key in DM.est_params:
+    print(f"{key}: {DM.est_params[key]}")
 
 # %%

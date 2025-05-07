@@ -2,6 +2,8 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from typing import List, Dict, Optional, Tuple, Any
 
@@ -73,3 +75,67 @@ def join_data(res: Dict[str, object]) -> pd.DataFrame:
 #     Check for convergence.
 #     """
 #     return np.max(np.abs(x_new - x)) < tol
+
+
+def plot_descriptive_stats(df):
+    df_plot = df.copy()
+    df_plot["Log_H"] = np.log(df_plot["High_Ed_Population"])
+    df_plot["Log_L"] = np.log(df_plot["Low_Ed_Population"])
+    df_plot["Log_Z_H"] = np.log(df_plot["Z_H"])
+    df_plot["Log_Z_L"] = np.log(df_plot["Z_L"])
+
+    df_plot["Log_Wage_H"] = df_plot["Log_Wage_H"] - df_plot["Log_Wage_H"].mean()
+    df_plot["Log_Wage_L"] = df_plot["Log_Wage_L"] - df_plot["Log_Wage_L"].mean()
+
+    for var in [
+        "Log_H",
+        "Log_L",
+        "Log_Z_H",
+        "Log_Z_L",
+        "Amenity_Endog",
+        "Regulatory_Constraint",
+        "Geographic_Constraint",
+        "Log_Rent",
+    ]:
+        plt.figure(figsize=(10, 6))
+        plt.scatter(
+            df_plot[var],
+            df_plot["Log_Wage_H"],
+            alpha=0.5,
+            color="blue",
+            label="High Education",
+        )
+        plt.scatter(
+            df_plot[var],
+            df_plot["Log_Wage_L"],
+            alpha=0.5,
+            color="red",
+            label="Low Education",
+        )
+
+        # Plot best fit line
+        z = np.polyfit(df_plot[var], df_plot["Log_Wage_H"], 1)
+        p = np.poly1d(z)
+        plt.plot(
+            df_plot[var],
+            p(df_plot[var]),
+            color="blue",
+            alpha=0.5,
+            label="High Education Fit",
+        )
+        z = np.polyfit(df_plot[var], df_plot["Log_Wage_L"], 1)
+        p = np.poly1d(z)
+        plt.plot(
+            df_plot[var],
+            p(df_plot[var]),
+            color="red",
+            alpha=0.5,
+            label="Low Education Fit",
+        )
+
+        plt.title(f"{var} vs Log Wage")
+        plt.xlabel(var)
+        plt.ylabel("Log Wage")
+        plt.legend()
+        plt.grid()
+        plt.plot()

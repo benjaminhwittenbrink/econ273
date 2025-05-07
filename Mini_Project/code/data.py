@@ -83,6 +83,7 @@ class DiamondData:
 
         ###### Randomly assign cities to states ######
         self.prob_from_state = np.random.gamma(2, 2, size=self.params["J"])
+        # self.prob_from_state = np.random.uniform(0, 1, size=self.params["J"])
         self.prob_from_state = self.prob_from_state / np.sum(self.prob_from_state)
 
         ###### Housing Supply ######
@@ -163,9 +164,9 @@ class DiamondData:
         sol = least_squares(
             self._solve_prices,
             init,
-            xtol=1e-10,
-            ftol=1e-10,
-            gtol=1e-10,
+            xtol=1e-6,
+            ftol=1e-6,
+            gtol=1e-6,
         )
 
         if not sol.success:
@@ -266,7 +267,6 @@ class DiamondData:
         tot_pop = np.zeros(self.params["J"])
         for race in self.params["race_types"]:
             delta = self._get_delta(wage, rent, amenity_endog, race=race)
-            delta = delta - np.mean(delta)
             self.delta[(edu, race)] = delta
 
             pop = self._calculate_group_population(
@@ -291,31 +291,21 @@ class DiamondData:
             + self.amenity_exog * self.params["beta_x"][race]
         )
 
-    def _solve_rents(self, H, L, wage_H, wage_L, tol=1e-7):
+    def _solve_rents(self, H, L, wage_H, wage_L, tol=1e-6):
         """
         Find the fixed point for rent given the population and wages.
         """
         J = self.params["J"]
         x0 = np.concatenate([np.ones(J), np.ones(J)])
 
-        def rent_residuals(x):
-            r, log_HD = x[:J], x[J:]
-            eq1 = r - (
-                np.log(self.params["iota"])
-                + np.log(self.construction_costs)
-                + self.phi * log_HD
-            )
-            eq2 = np.exp(log_HD) - (
-                L * self.params["zeta"] * np.exp(wage_L - r)
-                + H * self.params["zeta"] * np.exp(wage_H - r)
-            )
-            return np.concatenate([eq1, eq2])
+        M = self.params["zeta"] * (L * np.exp(wage_L) + H * np.exp(wage_H))
+        M = np.clip(M, 1e-6, None)
 
-        sol = least_squares(rent_residuals, x0, xtol=tol, ftol=tol, gtol=tol)
-        if not sol.success:
-            logger.warning("Rent fixed point did not converge.")
-
-        rent = sol.x[:J]
+        rent = (1 / (1 + self.phi)) * (
+            np.log(self.params["iota"])
+            + np.log(self.construction_costs)
+            + self.phi * np.log(M)
+        )
         return rent
 
     def _convergence_check(self, x, x_new, tol):

@@ -5,6 +5,7 @@ import os
 import logging
 import toml
 from importlib import reload
+import time
 from utils import *
 
 
@@ -59,11 +60,16 @@ dfs = []
 for s in tqdm([default_seed + i for i in range(N_iters)]):
     logging.info(f"Simulating with seed {s}.")
     try:
+        start = time.time()
         DD = data.DiamondData(params, seed=s)
         DD.simulate()
         DD.write()
         df = DD.to_dataframe()
         dfs.append(df)
+        end = time.time()
+        # logging.info(
+        #     f"Simulation with seed {s} completed in {end - start:.2f} seconds."
+        # )
     except Exception as e:
         logging.error(f"Error with seed {s}: {e}")
         continue

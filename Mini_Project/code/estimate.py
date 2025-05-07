@@ -260,7 +260,8 @@ class DiamondModel:
         delta_hat : dict with mean utilities for each type
         """
         df = self.data
-        delta0 = np.ones(self.params["J"])
+        N = len(df)
+        delta0 = np.ones(N)
 
         delta_hat = {}
         for edu in self.params["edu_types"]:
@@ -281,10 +282,6 @@ class DiamondModel:
 
         beta_st = theta[0]
         delta_hat = self._blp_inversion(beta_st)
-
-        self._labor_demand_parameters()
-        self._housing_supply_parameters()
-        self._amenity_supply_parameters()
         moments = self._labor_supply_parameters(delta_hat)
 
         return moments
@@ -364,6 +361,11 @@ class DiamondModel:
         self.W = W_opt
         self.g = g2
         self.est_params["beta_st"] = theta2[0]
+
+        # Get other parameters
+        self._labor_demand_parameters()
+        self._housing_supply_parameters()
+        self._amenity_supply_parameters()
 
         # Compute VCV matrix ?
         logger.info("GMM estimation finished.")

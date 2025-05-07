@@ -27,7 +27,7 @@ phi_a = 0.5
 # Utility
 zeta = 0.8
 
-beta_st = 5
+beta_st = 3
 
 [beta_x]  
 White = 0.3

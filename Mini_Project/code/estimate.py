@@ -123,9 +123,9 @@ class DiamondModel:
         ).fit()
 
         self.est_params["iota"] = np.exp(IV_reg.params.iloc[0])
-        self.est_params["phi"] = IV_reg.params.iloc[0]
-        self.est_params["phi_geo"] = IV_reg.params.iloc[0]
-        self.est_params["phi_reg"] = IV_reg.params.iloc[0]
+        self.est_params["phi"] = IV_reg.params.iloc[1]
+        self.est_params["phi_geo"] = IV_reg.params.iloc[2]
+        self.est_params["phi_reg"] = IV_reg.params.iloc[3]
 
     def _amenity_supply_parameters(self) -> np.ndarray:
         """
@@ -147,55 +147,63 @@ class DiamondModel:
     def _labor_supply_parameters(self, delta_hat: np.ndarray) -> np.ndarray:
         """
         Run 2SLS regression to get labor supply parameters:
-        delta = phi_a * (log_H-log_L) + epsilon_
+        delta = (wage - zeta * rent) * beta_w + amenity * beta_a + epsilon
         """
 
         df = self.data
         zeta = self.params["zeta"]
 
-        X = [df.Log_Wage_H - zeta * df.Log_Rent, df.Log_Wage_L - zeta * df.Log_Rent]
-        A = df.Amenity_Endog
-        Z_full = self.instruments
-
         for race in self.params["race_types"]:
-            # stack dependent δ’s for both edus
-            ys = []
-            Xs = []
-            As = []
-            Zs = []
 
-            for i, edu in enumerate(self.params["edu_types"]):
-                # δ is keyed by (edu, race)
-                ys.append(delta_hat[(edu, race)])
-                Xs.append(X[i])
-                As.append(A)
-                Zs.append(Z_full)
+            def objective(params, race="White"):
+                beta_w, beta_a = params
+                # Get residuals from both high and low education
+                res_H = (
+                    delta_hat[("H", race)]
+                    - (df.Log_Wage_H - zeta * df.Log_Rent) * beta_w
+                    - df.Amenity_Endog * beta_a
+                )
+                res_L = (
+                    delta_hat[("L", race)]
+                    - (df.Log_Wage_L - zeta * df.Log_Rent) * beta_w
+                    - df.Amenity_Endog * beta_a
+                )
 
-            # concatenate along the observation axis
-            y_stack = np.concatenate(ys)
-            X_stack = np.concatenate(Xs)
-            A_stack = np.concatenate(As)
-            endog = np.column_stack([X_stack, A_stack])
-            Z = pd.concat(Zs, axis=0).values
+                # Moment conditions
+                moment_H = np.mean(res_H.to_numpy()[:, None] * self.instruments, axis=0)
+                moment_L = np.mean(res_L.to_numpy()[:, None] * self.instruments, axis=0)
+                xi = np.concatenate([moment_H, moment_L])
+                return np.dot(xi, xi)
 
-            # run one IV regression per race
-            iv_reg = IV2SLS(
-                dependent=y_stack,
-                exog=None,  # no exogenous covariates
-                endog=endog,  # the two regressors whose β’s we want
-                instruments=Z,
-            ).fit()
-
+            # Minimize residuals
+            res = minimize(objective, [0.1, 0.1], args=(race,))
+            beta_w, beta_a = res.x
             # save
-            self.est_params[f"beta_w_{race}"] = iv_reg.params.iloc[0]
-            self.est_params[f"beta_a_{race}"] = iv_reg.params.iloc[1]
+            self.est_params[f"beta_w_{race}"] = beta_w
+            self.est_params[f"beta_a_{race}"] = beta_a
 
     # -------------------------------------------------------------------------
     # BLP inner loop  (share inversion)
     # -------------------------------------------------------------------------
-    def _blp_inversion(
-        self, beta_st: dict, max_iter: int = 1000
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _invert_delta(
+        self, target_share, delta0, edu, race, beta_st, tol=1e-10, maxiter=1000
+    ):
+        delta = delta0.copy()
+        for i in range(maxiter):
+            share_pred = self.DD._calculate_group_population(delta, edu, race, beta_st)
+            delta_new = delta + np.log(target_share) - np.log(share_pred)
+            if np.max(np.abs(delta_new - delta)) < tol:
+                break
+            delta = delta_new
+
+        if i == maxiter - 1:
+            raise Warning(
+                f"Delta contraction mapping did not converge (max diff={np.max(np.abs(delta_new - delta))})."
+            )
+
+        return np.array(delta)
+
+    def _blp_inversion(self, beta_st: dict) -> np.ndarray:
         """
         Solve for delta hat that reproduces observed H/L shares, given nonlinear
         preferences theta_N:
@@ -206,23 +214,16 @@ class DiamondModel:
         delta_hat : dict with mean utilities for each type
         """
         df = self.data
-
-        # solve for delta for each type
-        def objective(delta, df, edu, race):
-
-            pop_est = self.DD._calculate_group_population(
-                delta, edu, race, beta_st=beta_st
-            )
-
-            res = pop_est - df[f"Pop_{edu}{race}"]
-            return (res**2).sum()
+        delta0 = np.ones(self.params["J"])
 
         delta_hat = {}
         for edu in self.params["edu_types"]:
             for race in self.params["race_types"]:
-                delta0 = np.ones(self.params["J"])
-                res = minimize(objective, delta0, args=(df, edu, race))
-                delta_hat[(edu, race)] = res.x
+                d = self._invert_delta(
+                    df[f"Pop_{edu}{race}"], delta0, edu, race, beta_st
+                )
+                d = d - np.mean(d)
+                delta_hat[(edu, race)] = d
 
         return delta_hat
 
@@ -241,6 +242,13 @@ class DiamondModel:
         self._housing_supply_parameters()
         self._amenity_supply_parameters()
         self._labor_supply_parameters(delta_hat)
+
+        # print(f"\n\nbeta_w_White: {self.est_params['beta_w_White']}")
+        # print(f"beta_w_Black: {self.est_params['beta_w_Black']}")
+        # print(f"beta_a_White: {self.est_params['beta_a_White']}")
+        # print(f"beta_a_Black: {self.est_params['beta_a_Black']}")
+        # print(f"beta_st_White: {theta[0]}")
+        # print(f"beta_st_Black: {theta[1]}")
 
         moments = []
         for edu in self.params["edu_types"]:
@@ -298,7 +306,7 @@ class DiamondModel:
             self._gmm_objective_fn,
             theta0,
             args=(W,),
-            method="BFGS",
+            method="Nelder-mead",
             options=outer_options or {"disp": self.verbose},
         )
         theta1 = res1.x
@@ -316,7 +324,7 @@ class DiamondModel:
             self._gmm_objective_fn,
             theta1,
             args=(W_opt,),
-            method="BFGS",
+            method="Nelder-mead",
             options=outer_options or {"disp": self.verbose},
         )
         theta2 = res2.x

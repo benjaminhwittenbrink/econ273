@@ -34,14 +34,14 @@ class DiamondData:
             file_dir = "/DiamondData"
         seed_str = "_" + str(self.seed)
         date_str = "_" + dt.datetime.now().strftime("%Y_%m_%d")
-        dir = "../data" + file_dir + seed_str + date_str + "/"
-        if not os.path.isdir(dir):
-            os.makedirs(dir)
-        with open(dir + "DiamondData.pkl", "wb") as f:
+        out_dir = "../data" + file_dir + seed_str + date_str + "/"
+        if not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
+        with open(out_dir + "DiamondData.pkl", "wb") as f:
             pickle.dump(self, f)
         city_df = self.to_dataframe()
-        city_df.to_csv(dir + "DiamondCityData.csv", index=False)
-        logger.info(f"Saved {self.__class__.__name__} to {dir}")
+        city_df.to_csv(out_dir + "DiamondCityData.csv", index=False)
+        logger.info(f"Saved {self.__class__.__name__} to {out_dir}")
 
     def to_dataframe(self):
         """
@@ -49,7 +49,6 @@ class DiamondData:
         """
         city_data = {
             "City": np.arange(self.params["J"]),
-            "State": self.city_state,
             "P_Same_State": self.prob_from_state,
             "Population": self.population,
             "Log_Wage_H": self.wage_H,
@@ -83,9 +82,6 @@ class DiamondData:
         """
 
         ###### Randomly assign cities to states ######
-        self.city_state = np.random.randint(
-            1, self.params["NUM_STATES"] + 1, size=self.params["J"]
-        )
         self.prob_from_state = np.random.uniform(0, 1, size=self.params["J"])
         self.prob_from_state = self.prob_from_state / np.sum(self.prob_from_state)
 
@@ -248,28 +244,21 @@ class DiamondData:
 
         pop = np.zeros(self.params["J"])
 
-        tot_exp_delta = np.sum(np.exp(delta))
-        for j in range(self.params["J"]):
-            tot_exp_delta_mj = tot_exp_delta - np.exp(delta[j])
+        exp_d = np.exp(delta)
+        exp_d_beta = np.exp(delta + beta_st[race])
+        tot_exp_d = exp_d.sum()
 
-            # Share of individuals from this state that will choose to live there
-            pop[j] += (
-                self.prob_from_state[j]
-                * np.exp(delta[j] + beta_st[race])
-                / (np.exp(delta[j] + beta_st[race]) + tot_exp_delta_mj)
-            )
+        denom = exp_d_beta + (tot_exp_d - exp_d)
 
-            # Share of individuals from other states that will choose to live here
-            for n in range(self.params["J"]):
-                tot_exp_delta_mn = tot_exp_delta - np.exp(delta[n])
-                if n != j:
-                    pop[j] += (
-                        (self.prob_from_state[n])
-                        * np.exp(delta[j])
-                        / (np.exp(delta[n] + beta_st[race]) + tot_exp_delta_mn)
-                    )
+        # Share of individuals from this state that will choose to live there
+        term1 = self.prob_from_state * exp_d_beta / denom
 
-        pop = pop * self.total_population[(edu, race)]
+        # Share of individuals from other states that will choose to live there
+        prob_over_denom = self.prob_from_state / denom  # p_n / D_n
+        sum_prob_over_denom = prob_over_denom.sum()  # Σ_n p_n / D_n
+        term2 = exp_d * (sum_prob_over_denom - prob_over_denom)
+
+        pop = (term1 + term2) * self.total_population[(edu, race)]
         return pop
 
     def _calculate_population(self, wage, rent, amenity_endog, edu="H"):
@@ -281,6 +270,7 @@ class DiamondData:
         tot_pop = np.zeros(self.params["J"])
         for race in self.params["race_types"]:
             delta = self._get_delta(wage, rent, amenity_endog, race=race)
+            delta = delta - np.mean(delta)
             self.delta[(edu, race)] = delta
 
             pop = self._calculate_group_population(
@@ -309,13 +299,13 @@ class DiamondData:
         x0 = np.concatenate([np.ones(J), np.ones(J)])
 
         def rent_residuals(x):
-            r, HD = x[:J], x[J:]
+            r, log_HD = x[:J], x[J:]
             eq1 = r - (
                 np.log(self.params["iota"])
                 + np.log(self.construction_costs)
-                + self.phi * np.log(HD)
+                + self.phi * log_HD
             )
-            eq2 = HD - (
+            eq2 = np.exp(log_HD) - (
                 L * self.params["zeta"] * np.exp(wage_L - r)
                 + H * self.params["zeta"] * np.exp(wage_H - r)
             )

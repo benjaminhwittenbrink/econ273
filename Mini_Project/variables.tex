@@ -1,5 +1,6 @@
 \newcommand{\params_J}{50}
-\newcommand{\params_NUM_STATES}{10}
+\newcommand{\params_edu_types}{['H', 'L']}
+\newcommand{\params_race_types}{['White', 'Black']}
 \newcommand{\params_gamma_HH}{-0.2}
 \newcommand{\params_gamma_HL}{0.5}
 \newcommand{\params_gamma_LL}{-0.5}
@@ -13,20 +14,19 @@
 \newcommand{\params_phi_geo}{0.3}
 \newcommand{\params_phi_reg}{0.4}
 \newcommand{\params_phi_a}{0.5}
-\newcommand{\params_beta_x}{[0.3, 0.7]}
-\newcommand{\params_beta_a}{[0.6, 0.4]}
-\newcommand{\params_beta_st}{[0.2, 0.5]}
-\newcommand{\params_beta_w}{[0.6, 0.5]}
 \newcommand{\params_zeta}{0.8}
-\newcommand{\params_H}{{'N': 100, 'p_black': 0.2}}
-\newcommand{\params_L}{{'N': 200, 'p_black': 0.9}}
-\newcommand{\params_Z_H}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_Z_L}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_x_geo}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_x_reg}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_CC}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_x}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_a}{{'mu': 0, 'sigma': 1}}
-\newcommand{\params_epsilon_H}{{'mu': 2, 'sigma': 1}}
-\newcommand{\params_epsilon_L}{{'mu': 1, 'sigma': 1}}
-\newcommand{\params_epsilon_a}{{'mu': 0, 'sigma': 1}}
+\newcommand{\params_beta_st}{5}
+\newcommand{\params_beta_x}{{'White': 0.3, 'Black': 0.7}}
+\newcommand{\params_beta_a}{{'White': 0.3, 'Black': 0.9}}
+\newcommand{\params_beta_w}{{'White': 0.9, 'Black': 0.2}}
+\newcommand{\params_H}{{'Black': {'N': 20}, 'White': {'N': 80}}}
+\newcommand{\params_L}{{'Black': {'N': 180}, 'White': {'N': 20}}}
+\newcommand{\params_Z_H}{{'mu': 0, 'sigma': 0.5}}
+\newcommand{\params_Z_L}{{'mu': 0, 'sigma': 0.5}}
+\newcommand{\params_x_geo}{{'mu': 0, 'sigma': 0.5}}
+\newcommand{\params_x_reg}{{'mu': 0, 'sigma': 0.5}}
+\newcommand{\params_CC}{{'mu': 0, 'sigma': 0.01}}
+\newcommand{\params_x}{{'mu': 0, 'sigma': 0.01}}
+\newcommand{\params_epsilon_H}{{'mu': 2, 'sigma': 0.01}}
+\newcommand{\params_epsilon_L}{{'mu': 1, 'sigma': 0.01}}
+\newcommand{\params_epsilon_a}{{'mu': 0, 'sigma': 0.01}}

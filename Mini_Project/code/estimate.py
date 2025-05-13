@@ -68,9 +68,9 @@ class DiamondModel:
         self.instruments_sub = self.data[["Log_Z_H", "Log_Z_L"]]
 
     # -------------------------------------------------------------------------
-    #  Moment-condition builders  (TODO:)
+    #  Moment-condition builders
     # -------------------------------------------------------------------------
-    def _labor_demand_parameters(self) -> np.ndarray:
+    def _labor_demand_parameters(self) -> None:
         """
         Run 2SLS regression to get labor demand parameters:
         Log_Wage_H = gamma_HH * log(High_Ed_Population) + gamma_HL * log(Low_Ed_Population) + epsilon_H
@@ -106,7 +106,7 @@ class DiamondModel:
         self.est_params["gamma_LH"] = IV_reg_L.params.iloc[3]
         self.est_params["gamma_LL"] = IV_reg_L.params.iloc[4]
 
-    def _housing_supply_parameters(self) -> np.ndarray:
+    def _housing_supply_parameters(self) -> None:
         """
         Run 2SLS regression to get amenity supply parameters:
         Log_Rent = i+ phi*log_HD + phi_geo*log_HD*Geographic_Constraint + phi_reg*log_HD*Regulatory_Constraint + epsilon_CC
@@ -140,7 +140,7 @@ class DiamondModel:
         self.est_params["phi_geo"] = IV_reg.params.iloc[2]
         self.est_params["phi_reg"] = IV_reg.params.iloc[3]
 
-    def _amenity_supply_parameters(self) -> np.ndarray:
+    def _amenity_supply_parameters(self) -> None:
         """
         Run 2SLS regression to get amenity supply parameters:
         Amenity_Endog = phi_a * (log_H-log_L) + epsilon_
@@ -312,7 +312,7 @@ class DiamondModel:
             zeta,
             beta_w_White, beta_w_Black,
             beta_a_White, beta_a_Black,
-            beta_st_White, beta_st_Black,
+            beta_st
             phi_a,
             phi, phi_geo, phi_reg
 

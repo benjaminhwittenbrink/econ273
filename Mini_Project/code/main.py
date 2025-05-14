@@ -88,10 +88,22 @@ DM = estimate.DiamondModel(df, DD, seed=default_seed, verbose=True)
 DM.initialize()
 
 # %%
-DM.fit(theta0=np.array([4]))
+DM.fit(theta0=np.array([4, 1]))
 
 print("=== Estimation Results ===")
 for key in DM.est_params:
-    print(f"{key}: {DM.est_params[key]}")
+    val = DM.est_params[key]
+    if type(val) == dict:
+        for sub_key in val:
+            sub_val = val[sub_key]
+            sub_val_true = DM.params[key][sub_key]
+            print(f"{key}[{sub_key}] = {sub_val:.4f} (true: {sub_val_true:.4f})")
+    else:
+        val_true = DM.params[key]
+        print(f"{key} = {val:.4f} (true: {val_true:.4f})")
+
+
+# %%
+DM.run_counterfactual()
 
 # %%

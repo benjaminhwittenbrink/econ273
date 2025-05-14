@@ -75,22 +75,22 @@ sigma = 0.5
 
 [CC]
 mu = 0
-sigma = 0.01
+sigma = 0.1
 
 # Amenities
 [x]
 mu = 0
-sigma = 0.01
+sigma = 0.1
 
 ###### Un-Observables
 [epsilon_H]
 mu = 2
-sigma = 0.01
+sigma = 0.1
 
 [epsilon_L]
 mu = 1
-sigma = 0.01
+sigma = 0.1
 
 [epsilon_a]
 mu = 0
-sigma = 0.01
+sigma = 0.1

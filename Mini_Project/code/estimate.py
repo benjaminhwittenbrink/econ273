@@ -68,7 +68,7 @@ class DiamondModel:
         self.instruments_sub = self.data[["Log_Z_H", "Log_Z_L"]]
 
     # -------------------------------------------------------------------------
-    #  Moment-condition builders  (TODO:)
+    #  Moment-condition builders
     # -------------------------------------------------------------------------
     def _labor_demand_parameters(self) -> np.ndarray:
         """
@@ -106,16 +106,12 @@ class DiamondModel:
         self.est_params["gamma_LH"] = IV_reg_L.params.iloc[3]
         self.est_params["gamma_LL"] = IV_reg_L.params.iloc[4]
 
-    def _housing_supply_parameters(self) -> np.ndarray:
+    def _housing_supply_parameters(self, zeta) -> np.ndarray:
         """
         Run 2SLS regression to get amenity supply parameters:
         Log_Rent = i+ phi*log_HD + phi_geo*log_HD*Geographic_Constraint + phi_reg*log_HD*Regulatory_Constraint + epsilon_CC
         """
-        # 1. unpack parameters
-        zeta = self.params["zeta"]
         df = self.data
-        Z = df[["Z_H", "Z_L", "Z_H_reg", "Z_H_geo", "Z_L_reg", "Z_L_geo"]].values
-        # 2. calculate residuals
         log_HD = np.log(
             zeta
             * (
@@ -124,12 +120,13 @@ class DiamondModel:
             )
         )
 
+        y = df["Log_Rent"]
         log_HD_x_geo = log_HD * df["Geographic_Constraint"]
         log_HD_x_reg = log_HD * df["Regulatory_Constraint"]
         endog = np.column_stack([log_HD, log_HD_x_geo, log_HD_x_reg])
 
         IV_reg = IV2SLS(
-            dependent=df["Log_Rent"],
+            dependent=y,
             exog=np.ones((len(df), 1)),
             endog=endog,
             instruments=self.instruments_full,
@@ -139,6 +136,11 @@ class DiamondModel:
         self.est_params["phi"] = IV_reg.params.iloc[1]
         self.est_params["phi_geo"] = IV_reg.params.iloc[2]
         self.est_params["phi_reg"] = IV_reg.params.iloc[3]
+
+        # Get residuals for moment conditions
+        res = sm.OLS(y, sm.add_constant(endog)).fit()
+        g = np.mean(res.resid.to_numpy()[:, None] * self.instruments_full, axis=0)
+        return g.to_numpy()
 
     def _amenity_supply_parameters(self) -> np.ndarray:
         """
@@ -207,23 +209,25 @@ class DiamondModel:
             g,
         )
 
-    def _labor_supply_parameters(self, delta_hat: np.ndarray) -> np.ndarray:
+    def _labor_supply_parameters(self, delta_hat: np.ndarray, zeta) -> np.ndarray:
         """
         Run 2SLS regression to get labor supply parameters:
         delta = (wage - zeta * rent) * beta_w + amenity * beta_a + epsilon
         """
 
         df = self.data
-        zeta = self.params["zeta"]
         moments = []
+
+        self.est_params["beta_w"] = {}
+        self.est_params["beta_a"] = {}
 
         for race in self.params["race_types"]:
             beta_w, beta_a, g = self._estimate_2sls(delta_hat, df, zeta, race=race)
             moments.append(g)
 
             # save
-            self.est_params[f"beta_w_{race}"] = beta_w
-            self.est_params[f"beta_a_{race}"] = beta_a
+            self.est_params["beta_w"][race] = beta_w
+            self.est_params["beta_a"][race] = beta_a
 
         return np.concatenate(moments)
 
@@ -277,12 +281,11 @@ class DiamondModel:
     # GMM housekeeping
     # -------------------------------------------------------------------------
     def _stack_moments(self, theta: np.ndarray) -> np.ndarray:
-
-        df = self.data
-
-        beta_st = theta[0]
+        beta_st, zeta = theta
         delta_hat = self._blp_inversion(beta_st)
-        moments = self._labor_supply_parameters(delta_hat)
+        moments1 = self._labor_supply_parameters(delta_hat, zeta)
+        moments2 = self._housing_supply_parameters(zeta)
+        moments = np.concatenate([moments1, moments2])
 
         return moments
 
@@ -299,23 +302,12 @@ class DiamondModel:
 
     def fit(
         self,
-        theta0: np.ndarray = np.ones(1),
+        theta0: np.ndarray = np.ones(2),
         outer_options: Dict[str, Any] = {"disp": False},
     ):
         """
         Two-step GMM: first W = I, then optimal W = (Sigma hat)^-1 with
         residual outer-product.
-
-        Parameters:
-            gamma_HH, gamma_HL, gamma_LH, gamma_LL,
-            alpha_HH, alpha_HL, alpha_LH, alpha_LL,
-            zeta,
-            beta_w_White, beta_w_Black,
-            beta_a_White, beta_a_Black,
-            beta_st_White, beta_st_Black,
-            phi_a,
-            phi, phi_geo, phi_reg
-
         """
 
         method = "Nelder-Mead"  # "L-BFGS-B"  # "Powell" #
@@ -361,11 +353,82 @@ class DiamondModel:
         self.W = W_opt
         self.g = g2
         self.est_params["beta_st"] = theta2[0]
+        self.est_params["zeta"] = theta2[1]
 
         # Get other parameters
         self._labor_demand_parameters()
-        self._housing_supply_parameters()
         self._amenity_supply_parameters()
 
         # Compute VCV matrix ?
         logger.info("GMM estimation finished.")
+
+    def run_counterfactual(self, seed: int = 1):
+        """
+        Run a counterfactual simulation.
+        """
+        np.random.seed(seed)
+        regulation_shock = np.random.uniform(-0.3, 0.3, len(self.data))
+
+        params = self.DD.params.copy()
+        for key in self.est_params:
+            val = self.est_params[key]
+            if type(val) == dict:
+                for sub_key in val:
+                    sub_val = val[sub_key]
+                    params[key][sub_key] = sub_val
+            else:
+                params[key] = val
+
+        def resimulate_data(update_params=False):
+            DD = DiamondData(self.DD.params, seed=self.DD.seed)
+            DD._simulate_exog()
+            DD.x_reg = DD.x_reg + regulation_shock
+            if update_params:
+                DD.params = params
+            DD.phi = (
+                DD.params["phi"]
+                + DD.params["phi_geo"] * DD.x_geo
+                + DD.params["phi_reg"] * DD.x_reg
+            )
+            DD._simulate_endog()
+            return DD
+
+        DD_new_params = resimulate_data(update_params=True).to_dataframe()
+        DD_old_params = resimulate_data(update_params=False).to_dataframe()
+
+        vars = ["High_Ed_Population", "Low_Ed_Population", "Log_Rent"]
+        labels = ["High Skill Population", "Low Skill Population", "Rent"]
+
+        # Plot difference
+        for i, var in enumerate(vars):
+
+            diff_old = DD_old_params[var] - self.data[var]
+            diff_new = DD_new_params[var] - self.data[var]
+
+            plt.figure(figsize=(10, 6))
+            plt.scatter(
+                regulation_shock, diff_old, alpha=0.5, color="blue", label="True Params"
+            )
+            plt.scatter(
+                regulation_shock,
+                diff_new,
+                alpha=0.5,
+                color="red",
+                label="Estimated Params",
+            )
+
+            # Plot best fit line
+            z = np.polyfit(regulation_shock, diff_new, 1)
+            p = np.poly1d(z)
+            plt.plot(regulation_shock, p(regulation_shock), color="red")
+
+            z = np.polyfit(regulation_shock, diff_old, 1)
+            p = np.poly1d(z)
+            plt.plot(regulation_shock, p(regulation_shock), color="blue")
+
+            plt.xlabel("Regulatory Constraint Shock")
+            plt.ylabel(f"Change in {labels[i]}")
+            plt.title(f"Change in {labels[i]} After Regulatory Constraint Shock")
+            plt.grid()
+            plt.legend()
+            plt.show()

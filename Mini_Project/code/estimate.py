@@ -69,7 +69,6 @@ class DiamondModel:
 
     # -------------------------------------------------------------------------
     #  Moment-condition builders
-    #  Moment-condition builders
     # -------------------------------------------------------------------------
     def _labor_demand_parameters(self) -> None:
         """

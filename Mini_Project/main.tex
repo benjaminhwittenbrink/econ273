@@ -67,68 +67,7 @@ We observe wages $w_{j}^X$ and employment, $X_{j}$ but exogeneous productivity $
 \subsection{Choice of Location}
 
 
-To focus on the geographic sorting of workers, the model abstracts from endogenous labor supply in the sense of choosing hours worked or occupation type. Rather, the sole dimension of labor supply choice is where to live and work. In determining this, workers trade off wages, the prices of local goods, and amenities, all of which are endogenous to local skill mix. In particular, each city offers a high-skill and a low-skill wage ($W_{j,t}^X$ for $X \in \{H, L\}$). The worker consumes local good $\ell$ and national good $n$, which have prices $p^\ell_{j}$ and $p^n$ respectively. These goods should be thought of as indices for how the cost of living in a given city at a point in time compares to the national average; recall that a key question in this paper is whether or to what extent such cost of living differences erode the welfare gains of higher wages. Assuming a single composite local and national good is stylized, and as usual can be justified under two-step budgeting.
-
-Finally, the worker also receives utility from the vector of amenities, $A_{j}$. Importantly, there is both an exogenous amenity $x$ and an endogenous amenity $a$ -- the latter of which responds to migration patterns. 
-
-
-Workers have preferences that are Cobb-Douglas in  the local and national good and additively separable in amenities. They wish to maximize consumption subject to their budget constraint. The taste for local versus national goods is governed by $\zeta$, which we assume to be constant across workers for simplicity. Thus, workers solve 
-\begin{equation}\label{eq_worker_util_max}
-    \max_{\ell,n} \zeta \log \ell + (1-\zeta)\log n + s_i(A_{j})
-\end{equation}
-subject to $p^n n + p^\ell_{j}\ell\leq W^X_{j}$. The FOC are
-$$\frac{W^X_{j}\zeta}{p^\ell_{j}} = \ell$$
-$$\frac{W^X_{j}(1-\zeta)}{p^n} = n$$
-Substituting into the indirect utility function worker $i$ would receive from living in city $j$ in year $t$:
-\begin{align}
-    V_{ij} &= \log n - \zeta \log \frac{n}{\ell} + s_i(A_{j}) \nonumber \\ 
-    &= \log \frac{W^X_{j}}{p^n_{t}} - \zeta \log\frac{p^\ell_{j}}{p^n_{t}} + \log\frac{(\zeta)^\zeta}{(1-\zeta)^{1-\zeta}} + s_i(A_{j})  \nonumber \\
-    &\equiv w^X_{j} - \zeta r_{j} + s_i(A_{j})
-\end{align}
-where $r_{j} \equiv \log p_{j}^\ell/p^n$ and $w_{j}^X = \log (W_{j}^X/p^n)$ and we can renormalize the indirect utility function to get rid of the constant. We also normalize $p^n=1$.
-Then, worker demand for local goods is,
-\begin{equation}\label{eq_worker_local_demand}
-    HD_{ij} = \zeta \frac{W^X_{j}}{p^\ell_{j}}
-\end{equation}
-
- 
-
-We assume there to be heterogeneity in worker preferences for amenities. Specifically,
-\begin{equation}\label{eq_worker_amenities}
-    s_i(A_{j}) = a_{j}\beta_d^a + x_{j}^A\beta_d^x + \beta_d^{st}st_{ij} +  \varepsilon_{ij}
-\end{equation}
-where $d\in\{\text{White}, \text{Black}\}$ is a demographic group of $i$ and:
-\begin{itemize}
-    \item $\beta_d^x$ is value of exogenous amenities
-    \item $\beta_d^{a}$ is value of endogenous amenities
-    \item $\beta_d^{st}$ is value of living in state of birth 
-    \item $st_{ij}$ is a dummy variable that is 1 if $i$'s state of birth is $j$ and 0 otherwise.
-    \item $\varepsilon_{ij}\sim\text{Type I Extreme Value}$
-\end{itemize}
-Our assumption implies that workers value city amenities differently based on their demographic attributes. Specifically, the model allows workers to assign distinct importance to exogenous amenities (such as climate or geography), endogenous amenities (such as public goods and services), and location-specific factors like residing in their birth state or census division. By incorporating these heterogeneities, the model captures how different demographic groups make location decisions based on their valuation of amenities. Additionally, the inclusion of an idiosyncratic preference shock ($\varepsilon_{ij}$) accounts for unobserved factors influencing individual choices, ensuring that workers' location preferences are not entirely deterministic.
-
-
-Substituting this into the indirect utility function,
-$$V_{ij}^X = (w_{j}^X-\zeta r_{j})\beta^w_d  + a_{j}\beta_d^a + x_{j}^A\beta_d^x + \beta_d^{st}x_{ij}^{st} + \varepsilon_{ij}$$ 
-Define $\delta_{jd}^X$ as the utility value of the components of the city $j$ which all workers of demographic group $d$ and education level $X$ value identically,
-$$\delta_{jd}^X = (w_{j} - \zeta r_{j})\beta_d^w + \beta^a_d a_{j} + \beta^x_d x_{j}^A$$
-Then,
-$$V_{ij} = \delta_{jd} + \beta^{st}_d st_{ij} + \varepsilon_{ij}$$
-Given the distribution of $\varepsilon$, observe that this is the standard conditional logit model. In particular, we can interpret aggregate population differences in cities of workers of type $z$ as differences in the average utility for these cities. Hence, the expected population of high and low skill workers in each city is just the probability of living in a given city summed over all workers of that type, i.e.: 
-\begin{align}
-H_{j} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})} \\
-L_{j} &= \sum_{i\in\mc{L}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})}
-\end{align}
-where $\mc{H}$ and $\mc{L}$ represent the total set of high and low-skill workers, respectively.
-
-Denote $\mc{H}_j$ to be the set of workers born in $j$'s state and suppose every city is in a different state. Then we can simplify,
-\begin{align*}
-H_{j} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})} \\
-&= \sum_{i\in\mc{H}_j} \frac{\exp(\delta_{jd} + \beta_d^{st})}{\exp(\delta_{jd} + \beta_d^{st}) + \sum_{k\neq j} \exp(\delta_{jd})} \\
-&\quad+ \sum_{n\neq j}\sum_{i\in \mc{H}_n} \frac{\exp(\delta_{jd})}{\exp(\delta_{nd} + \beta_d^{st})+\sum_{k\neq n} \exp(\delta_{kd})} \\
-&= |\mc{H}_j|\frac{\exp(\delta_{jd} + \beta_d^{st})}{\exp(\delta_{jd} + \beta_d^{st}) + \sum_{k\neq j} \exp(\delta_{jd})} + \sum_{n\neq j} |\mc{H}_n| \frac{\exp(\delta_{jd})}{\exp(\delta_{nd} + \beta_d^{st})+\sum_{k\neq n} \exp(\delta_{kd})} 
-\end{align*}
-Therefore, we can work with aggregate data instead of individual level data.
+To focus on the geographic sorting of workers, the model abstracts from endogenous labor supply in the sense of choosing hours worked or occupation type. Rather, the sole dimension of labor supply choice is where to live and work. In determining this, workers trade off wages, the prices of local goods, and amenities, all of which are endogenous to local skill mix. 
 
 In the equations above, we observe high and low-skill populations ($X_{j}$) and their wages ($w_{j}^X$) for $X \in \{H, L\}$. Additionally, we observe rent $r_{j}$, the endogeneous amenity index $a_{j}$, workers' demographics $\bm{z}$ and their stateof birth ($st_i$). Exogenous amenities $x_{j}^A$ and idiosyncratic worker tastes for cities $\varepsilon_{ij}$ are unobserved. Parameters to be estimated are $\zeta$ and $\beta \equiv (\beta^w, \beta^a, \beta^x, \beta^{st})$.
 

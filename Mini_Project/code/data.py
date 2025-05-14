@@ -83,7 +83,13 @@ class DiamondData:
                 city_data[f"TotPop_{edu}{race}"] = self.total_population[(edu, race)]
                 city_data[f"Pop_{edu}{race}"] = self.city_population[(edu, race)]
 
-        return pd.DataFrame(city_data)
+        df = pd.DataFrame(city_data)
+        df["High_Ed_Share"] = df["High_Ed_Population"] / df["Population"]
+
+        df["Log_H"] = np.log(df["High_Ed_Population"])
+        df["Log_L"] = np.log(df["Low_Ed_Population"])
+
+        return df
 
     ### Public Methods
     def simulate(self) -> None:
@@ -330,7 +336,7 @@ class DiamondData:
         )
 
     def _solve_rents(
-        self, H: np.ndarary, L: np.ndarray, wage_H: np.ndarray, wage_L: np.ndarary
+        self, H: np.ndarray, L: np.ndarray, wage_H: np.ndarray, wage_L: np.ndarray
     ) -> np.ndarray:
         """
         Calculate rents based on closed form expression using population and wages.

@@ -7,6 +7,7 @@ from typing import List, Dict, Tuple, Any
 from linearmodels.iv.model import IV2SLS
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
+import copy
 
 import utils
 
@@ -29,10 +30,7 @@ class DiamondModel:
         self.DD = DD
         self.data = df
 
-        self.data["Log_H"] = np.log(self.data["High_Ed_Population"])
-        self.data["Log_L"] = np.log(self.data["Low_Ed_Population"])
-
-        self.params = self.DD.params
+        self.params = copy.deepcopy(self.DD.params)
         self.verbose = verbose
 
         # Containers to be populated later
@@ -371,30 +369,36 @@ class DiamondModel:
         # Select city with highest exogenous amenity
         # ---------------------------------------------------------
         # Get exogenous amenity
-        # delta_hat = self._blp_inversion(self.est_params["beta_st"])
-        # a = []
-        # for race in self.params["race_types"]:
-        #     _, _, _, amenity_exog = self._estimate_2sls(
-        #         delta_hat, self.data, self.est_params["zeta"], race=race
-        #     )
-        #     amenity_exog_H = amenity_exog[: len(self.data)]
-        #     amenity_exog_L = amenity_exog[len(self.data) :]
+        delta_hat = self._blp_inversion(self.est_params["beta_st"])
+        a = []
+        for race in self.params["race_types"]:
+            _, _, _, amenity_exog = self._estimate_2sls(
+                delta_hat, self.data, self.est_params["zeta"], race=race
+            )
+            amenity_exog_H = amenity_exog[: len(self.data)]
+            amenity_exog_L = amenity_exog[len(self.data) :]
 
-        #     a.append(amenity_exog_H / (np.std(amenity_exog_H)))
-        #     a.append(amenity_exog_L / (np.std(amenity_exog_L)))
+            a.append(amenity_exog_H / (np.std(amenity_exog_H)))
+            a.append(amenity_exog_L / (np.std(amenity_exog_L)))
 
-        # a = np.mean(np.array(a), axis=0)
-        # df["exog_amenity"] = a
-        var = "Z_H"
+        a = np.mean(np.array(a), axis=0)
+        df["exog_amenity"] = a
+        # var = "Z_H"
+        x_axis_var = "exog_amenity"
 
         # Get city with highest exogenous amenity
-        city = df.loc[df[var].idxmax()]["City"]
+        city = df.loc[df[x_axis_var].idxmax()]["City"]
+        # print(f"City with highest {x_axis_var}: {city}")
 
-        # Create shock of 2 to city and 0 to all other cities
+        # ----------------------------------------------------------
+        # Update parameters
+        # ----------------------------------------------------------
+
+        # Create shock to max city and 0 to all other cities
         regulation_shock = np.zeros(len(self.data))
         regulation_shock[df["City"] == city] = 5
 
-        params = self.DD.params.copy()
+        params = copy.deepcopy(self.DD.params)
         for key in self.est_params:
             val = self.est_params[key]
             if type(val) == dict:
@@ -404,12 +408,13 @@ class DiamondModel:
             else:
                 params[key] = val
 
-        for key in self.DD.params:
-            if "gamma_HH" in key or "alpha_HH" in key:
-                params[key] = self.DD.params[key]
+        self.print_results()
+        # ---------------------------------------------------------
+        # Simulate data with new parameters
+        # ---------------------------------------------------------
 
         def resimulate_data(update_params=False):
-            DD = DiamondData(self.DD.params, seed=self.DD.seed)
+            DD = DiamondData(copy.deepcopy(self.DD.params), seed=self.DD.seed)
             DD._simulate_exog()
             DD.x_reg = DD.x_reg + regulation_shock
             if update_params:
@@ -422,8 +427,11 @@ class DiamondModel:
             DD._simulate_endog()
             return DD
 
-        DD_new_params = resimulate_data(update_params=True).to_dataframe()
-        DD_old_params = resimulate_data(update_params=False).to_dataframe()
+        DD_new = resimulate_data(update_params=True)
+        DD_old = resimulate_data(update_params=False)
+
+        DD_new_params = DD_new.to_dataframe()
+        DD_old_params = DD_old.to_dataframe()
         DD_preshock = df.copy()
 
         DD_new_params = DD_new_params[DD_new_params.City != city]
@@ -433,18 +441,19 @@ class DiamondModel:
         vars = ["High_Ed_Population", "Low_Ed_Population", "Log_Rent"]
         labels = ["High Skill Population", "Low Skill Population", "Rent"]
 
-        x_axis_label = "High Skill Demand Shock"
+        # x_axis_label = "High Skill Demand Shock"
+        x_axis_label = "Exogenous Amenity"
 
         # Plot difference
         for i, var in enumerate(vars):
 
-            x_axis = DD_preshock["Z_H"].to_numpy()
+            x_axis = DD_preshock[x_axis_var].to_numpy()
 
             diff_old = DD_old_params[var] - DD_preshock[var]
             diff_new = DD_new_params[var] - DD_preshock[var]
 
             plt.figure(figsize=(10, 6))
-            # plt.scatter(x_axis, diff_old, alpha=0.5, color="blue", label="True Params")
+            plt.scatter(x_axis, diff_old, alpha=0.5, color="blue", label="True Params")
             plt.scatter(
                 x_axis,
                 diff_new,
@@ -454,9 +463,9 @@ class DiamondModel:
             )
 
             # Plot best fit line
-            # z = np.polyfit(x_axis, diff_old, 1)
-            # p = np.poly1d(z)
-            # plt.plot(x_axis, p(x_axis), color="blue")
+            z = np.polyfit(x_axis, diff_old, 1)
+            p = np.poly1d(z)
+            plt.plot(x_axis, p(x_axis), color="blue")
 
             z = np.polyfit(x_axis, diff_new, 1)
             p = np.poly1d(z)
@@ -466,5 +475,122 @@ class DiamondModel:
             plt.ylabel(f"Change in {labels[i]}")
             plt.title(f"Change in {labels[i]} After Regulatory Constraint Shock")
             plt.grid()
-            # plt.legend()
+            plt.legend()
             plt.show()
+
+    def run_amenity_counterfactual(self):
+        """
+        Run a counterfactual simulation where endogenous amenity is fixed.
+        """
+
+        df = self.data
+
+        # ----------------------------------------------------------
+        # Update parameters
+        # ----------------------------------------------------------
+        params = copy.deepcopy(self.DD.params)
+        for key in self.est_params:
+            val = self.est_params[key]
+            if type(val) == dict:
+                for sub_key in val:
+                    sub_val = val[sub_key]
+                    params[key][sub_key] = sub_val
+            else:
+                params[key] = val
+
+        # ---------------------------------------------------------
+        # Simulate data with new parameters
+        # ---------------------------------------------------------
+        def resimulate_data(update_params=False):
+
+            if update_params:
+                DD = DiamondData(params, seed=self.DD.seed)
+            else:
+                DD = DiamondData(copy.deepcopy(self.DD.params), seed=self.DD.seed)
+
+            # Shut down endogenous amenity
+            DD.params["phi_a"] = 0
+            DD.simulate()
+            return DD
+
+        DD_update = resimulate_data(update_params=True).to_dataframe()
+        DD_original = resimulate_data(update_params=False).to_dataframe()
+        DD_endog_amenity = self.data
+
+        vars = ["Log_Wage_H", "Log_Wage_L", "Log_H", "Log_L", "Log_Rent"]
+        labels = [
+            "High Skill Wage",
+            "Low Skill Wage",
+            "High Skill Pop",
+            "Low Skill Pop",
+            "Log Rent",
+        ]
+
+        # Plot difference
+        for i, var in enumerate(vars):
+
+            x_axis = DD_endog_amenity[var].to_numpy()
+
+            var_update = DD_update[var]
+            var_original = DD_original[var]
+            var_amenity = DD_endog_amenity[var]
+
+            plt.figure(figsize=(10, 6))
+            # plt.scatter(
+            #     x_axis, var_original, alpha=0.5, color="blue", label="True Params"
+            # )
+            plt.scatter(
+                x_axis,
+                var_update,
+                alpha=0.5,
+                color="red",
+                label="Estimated Params",
+            )
+            # plt.scatter(
+            #     x_axis,
+            #     var_amenity,
+            #     alpha=0.5,
+            #     color="green",
+            #     label="Endogenous Amenity",
+            # )
+
+            # Plot best fit line
+            # z = np.polyfit(x_axis, var_original, 1)
+            # p = np.poly1d(z)
+            # plt.plot(x_axis, p(x_axis), color="blue")
+
+            z = np.polyfit(x_axis, var_update, 1)
+            p = np.poly1d(z)
+            plt.plot(x_axis, p(x_axis), color="red")
+
+            # z = np.polyfit(x_axis, var_amenity, 1)
+            # p = np.poly1d(z)
+            # plt.plot(x_axis, p(x_axis), color="green")
+
+            # Plot 45 degree line
+            plt.plot(x_axis, x_axis, color="black", linestyle="-")
+
+            plt.xlabel(f"{labels[i]} (endog)")
+            plt.ylabel(f"{labels[i]}")
+            plt.grid()
+            plt.legend()
+            plt.show()
+
+    def print_results(self, est_params=None):
+
+        if est_params is None:
+            est_params = self.est_params
+
+        print("=== Estimation Results ===")
+        for key in est_params:
+            val = est_params[key]
+            if type(val) == dict:
+                for sub_key in val:
+                    sub_val = val[sub_key]
+                    sub_val_true = self.params[key][sub_key]
+                    print(
+                        f"{key}[{sub_key}] = {sub_val:.4f} (true: {sub_val_true:.4f})"
+                    )
+            else:
+                val_true = self.params[key]
+                print(f"{key} = {val:.4f} (true: {val_true:.4f})")

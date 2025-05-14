@@ -5,7 +5,7 @@ race_types = ["White","Black"]
 
 # Production function
 gamma_HH = -0.2
-gamma_HL = 0.5
+gamma_HL = 0.3
 gamma_LL = -0.5
 gamma_LH = 0.7
 
@@ -22,7 +22,7 @@ phi_geo = 0.3
 phi_reg = 0.4
 
 # Amenity supply
-phi_a = 0.5
+phi_a = 3
 
 # Utility
 zeta = 0.8
@@ -30,16 +30,16 @@ zeta = 0.8
 beta_st = 3
 
 [beta_x]  
-White = 0.3
+White = 0.7
 Black = 0.7
 
 [beta_a] 
-White = 0.3
+White = 1.5
 Black = 0.9
 
 [beta_w]
-White = 0.9
-Black = 0.2
+White = 1.8
+Black = 2.2
 
 # Demographics
 [H]

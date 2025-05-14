@@ -89,21 +89,10 @@ DM.initialize()
 
 # %%
 DM.fit(theta0=np.array([4, 1]))
-
-print("=== Estimation Results ===")
-for key in DM.est_params:
-    val = DM.est_params[key]
-    if type(val) == dict:
-        for sub_key in val:
-            sub_val = val[sub_key]
-            sub_val_true = DM.params[key][sub_key]
-            print(f"{key}[{sub_key}] = {sub_val:.4f} (true: {sub_val_true:.4f})")
-    else:
-        val_true = DM.params[key]
-        print(f"{key} = {val:.4f} (true: {val_true:.4f})")
-
+DM.print_results()
 
 # %%
-DM.run_regulation_counterfactual()
+# DM.run_regulation_counterfactual()
+DM.run_amenity_counterfactual()
 
 # %%

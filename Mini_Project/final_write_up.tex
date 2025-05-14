@@ -19,8 +19,9 @@
 
 \section{Motivation}
 
-Over the past decades, the wage gap between high school and college graduates has significantly widened, accompanied by a pronounced geographic sorting of workers by skill. Metropolitan areas with a high concentration of college-educated residents have further increased their share of such workers between 1980 and 2000. This phenomenon, often referred to as ``the Great Divergence," has seen high-skill cities experience both robust wage growth and soaring housing costs. Such trends raise important questions about whether higher wages for college graduates have translated into improved economic well-being, given the offsetting effects of elevated local prices. While higher housing (and lifestyle) costs may diminish consumption benefits, the attractive amenities in these cities could potentially enhance overall worker welfare. In this project, we exposit, simulate, and estimate the empirical model in Diamond (2016): ``The Determinants and Welfare Implications of US Workers' Diverging Location Choices by Skill: 1980-2000." Here, we present the model, with slight simplifications, that we will use for simulation and estimation. 
-In particular, the paper uses a structural spatial equilibrium model to examine the determinants of this geographic sorting of workers by skill and the corresponding welfare implications. The key feature is that wages, prices, amenities are all codetermined by the balance of high and low skilled workers who endogenously move to a given area. 
+
+Over the past decades, the wage gap between high school and college graduates has significantly widened, accompanied by a pronounced geographic sorting of workers by skill. Metropolitan areas with a high concentration of college-educated residents have further increased their share of such workers between 1980 and 2000. This phenomenon, often referred to as ``the Great Divergence," has seen high-skill cities experience both robust wage growth and soaring housing costs. In an influential paper, Diamond (2016) develops a structural spatial equilibrium model to examine the determinants of this geographic sorting of workers by skill and the corresponding welfare implications. The key feature is that wages, prices, amenities are all codetermined by the balance of high and low skilled workers who endogenously move to a given area. In this project, we exposit, simulate, and estimate a simplified version of Diamond's empirical model. We then use the results to simulate the effect of a widely discussed policy counterfactual: XX
+%Such trends raise important questions about whether higher wages for college graduates have translated into improved economic well-being, given the offsetting effects of elevated local prices. While higher housing (and lifestyle) costs may diminish consumption benefits, the attractive amenities in these cities could potentially enhance overall worker welfare. In this project, we exposit, simulate, and estimate the empirical model in Diamond (2016): ``The Determinants and Welfare Implications of US Workers' Diverging Location Choices by Skill: 1980-2000." Here, we present the model, with slight simplifications, that we will use for simulation and estimation. 
 
 \section{Model}
 
@@ -124,9 +125,11 @@ Our estimation procedure is as follows:
 
 \item At this point, we have conjectured values of all parameters, so we can form our moment conditions and take the empirical mean to form our GMM objective function. We run two-step GMM, in the first step using the identity matrix as weights in the first step, and in the second step using the inverse of the empirical residual matrix from the first step. 
 
-\section*{Results}
-Column 2 of Table 1 displays the results of our estimation procedure. We obtain precise estimates of all our true coefficient
 \end{enumerate}
+
+\section*{Results}
+Column 2 of Table 1 displays the results of our estimation procedure. We obtain precise estimates of all our estimable coefficients.
+\section*{Application: The Incidence of Zoning Reform in General Equilibrium}
 
 \section*{Tables and Figures}
 \begin{table}[h]

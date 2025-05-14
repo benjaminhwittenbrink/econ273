@@ -104,6 +104,6 @@ for key in DM.est_params:
 
 
 # %%
-DM.run_counterfactual()
+DM.run_regulation_counterfactual()
 
 # %%

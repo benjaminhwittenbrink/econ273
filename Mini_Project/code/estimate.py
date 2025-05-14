@@ -199,15 +199,13 @@ class DiamondModel:
             instruments=Z,
         ).fit()
 
+        # iv_resids = res_IV.resids.to_numpy()
+
         # Get residuals for moment conditions
         res = sm.OLS(y, X).fit()
         g = np.mean(res.resid.to_numpy()[:, None] * Z, axis=0)
 
-        return (
-            res_IV.params.iloc[2],
-            res_IV.params.iloc[3],
-            g,
-        )
+        return (res_IV.params.iloc[2], res_IV.params.iloc[3], g, res.resid.to_numpy())
 
     def _labor_supply_parameters(self, delta_hat: np.ndarray, zeta) -> np.ndarray:
         """
@@ -222,7 +220,7 @@ class DiamondModel:
         self.est_params["beta_a"] = {}
 
         for race in self.params["race_types"]:
-            beta_w, beta_a, g = self._estimate_2sls(delta_hat, df, zeta, race=race)
+            beta_w, beta_a, g, _ = self._estimate_2sls(delta_hat, df, zeta, race=race)
             moments.append(g)
 
             # save
@@ -362,12 +360,39 @@ class DiamondModel:
         # Compute VCV matrix ?
         logger.info("GMM estimation finished.")
 
-    def run_counterfactual(self, seed: int = 1):
+    def run_regulation_counterfactual(self):
         """
-        Run a counterfactual simulation.
+        Run a counterfactual simulation with a regulation shock to one city.
         """
-        np.random.seed(seed)
-        regulation_shock = np.random.uniform(-0.3, 0.3, len(self.data))
+
+        df = self.data
+
+        # ---------------------------------------------------------
+        # Select city with highest exogenous amenity
+        # ---------------------------------------------------------
+        # Get exogenous amenity
+        # delta_hat = self._blp_inversion(self.est_params["beta_st"])
+        # a = []
+        # for race in self.params["race_types"]:
+        #     _, _, _, amenity_exog = self._estimate_2sls(
+        #         delta_hat, self.data, self.est_params["zeta"], race=race
+        #     )
+        #     amenity_exog_H = amenity_exog[: len(self.data)]
+        #     amenity_exog_L = amenity_exog[len(self.data) :]
+
+        #     a.append(amenity_exog_H / (np.std(amenity_exog_H)))
+        #     a.append(amenity_exog_L / (np.std(amenity_exog_L)))
+
+        # a = np.mean(np.array(a), axis=0)
+        # df["exog_amenity"] = a
+        var = "Z_H"
+
+        # Get city with highest exogenous amenity
+        city = df.loc[df[var].idxmax()]["City"]
+
+        # Create shock of 2 to city and 0 to all other cities
+        regulation_shock = np.zeros(len(self.data))
+        regulation_shock[df["City"] == city] = 5
 
         params = self.DD.params.copy()
         for key in self.est_params:
@@ -378,6 +403,10 @@ class DiamondModel:
                     params[key][sub_key] = sub_val
             else:
                 params[key] = val
+
+        for key in self.DD.params:
+            if "gamma_HH" in key or "alpha_HH" in key:
+                params[key] = self.DD.params[key]
 
         def resimulate_data(update_params=False):
             DD = DiamondData(self.DD.params, seed=self.DD.seed)
@@ -395,22 +424,29 @@ class DiamondModel:
 
         DD_new_params = resimulate_data(update_params=True).to_dataframe()
         DD_old_params = resimulate_data(update_params=False).to_dataframe()
+        DD_preshock = df.copy()
+
+        DD_new_params = DD_new_params[DD_new_params.City != city]
+        DD_old_params = DD_old_params[DD_old_params.City != city]
+        DD_preshock = DD_preshock[DD_preshock.City != city]
 
         vars = ["High_Ed_Population", "Low_Ed_Population", "Log_Rent"]
         labels = ["High Skill Population", "Low Skill Population", "Rent"]
 
+        x_axis_label = "High Skill Demand Shock"
+
         # Plot difference
         for i, var in enumerate(vars):
 
-            diff_old = DD_old_params[var] - self.data[var]
-            diff_new = DD_new_params[var] - self.data[var]
+            x_axis = DD_preshock["Z_H"].to_numpy()
+
+            diff_old = DD_old_params[var] - DD_preshock[var]
+            diff_new = DD_new_params[var] - DD_preshock[var]
 
             plt.figure(figsize=(10, 6))
+            # plt.scatter(x_axis, diff_old, alpha=0.5, color="blue", label="True Params")
             plt.scatter(
-                regulation_shock, diff_old, alpha=0.5, color="blue", label="True Params"
-            )
-            plt.scatter(
-                regulation_shock,
+                x_axis,
                 diff_new,
                 alpha=0.5,
                 color="red",
@@ -418,17 +454,17 @@ class DiamondModel:
             )
 
             # Plot best fit line
-            z = np.polyfit(regulation_shock, diff_new, 1)
-            p = np.poly1d(z)
-            plt.plot(regulation_shock, p(regulation_shock), color="red")
+            # z = np.polyfit(x_axis, diff_old, 1)
+            # p = np.poly1d(z)
+            # plt.plot(x_axis, p(x_axis), color="blue")
 
-            z = np.polyfit(regulation_shock, diff_old, 1)
+            z = np.polyfit(x_axis, diff_new, 1)
             p = np.poly1d(z)
-            plt.plot(regulation_shock, p(regulation_shock), color="blue")
+            plt.plot(x_axis, p(x_axis), color="red")
 
-            plt.xlabel("Regulatory Constraint Shock")
+            plt.xlabel(x_axis_label)
             plt.ylabel(f"Change in {labels[i]}")
             plt.title(f"Change in {labels[i]} After Regulatory Constraint Shock")
             plt.grid()
-            plt.legend()
+            # plt.legend()
             plt.show()

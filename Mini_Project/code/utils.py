@@ -3,8 +3,6 @@ import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import time
 
 from typing import List, Dict, Optional, Tuple, Any
 
@@ -165,3 +163,34 @@ def plot_descriptive_stats(df):
         plt.legend()
         plt.grid()
         plt.plot()
+
+
+def write_params(
+    params: Dict[str, Any], file_path: str, prefix: Optional[str] = "params"
+) -> None:
+    """
+    Write parameters to a file.
+    """
+    # Save to a LaTeX file
+    with open(file_path, "w") as f:
+        for key, value in params.items():
+            key = prefix + key.title().replace("_", "")
+            if isinstance(value, dict):  # Handle nested sections
+                for sub_key, sub_value in value.items():
+                    sub_key = sub_key.title().replace("_", "")
+                    if isinstance(sub_value, list):
+                        value_str = ", ".join(map(str, sub_value))
+                        f.write(
+                            f"\\newcommand{{\\{key}{sub_key}}}{{\\{{{value_str}\\}}}}\n"
+                        )
+                    elif isinstance(sub_value, dict):
+                        for ssk, ssv in sub_value.items():
+                            ssk = ssk.title().replace("_", "")
+                            f.write(f"\\newcommand{{\\{key}{sub_key}{ssk}}}{{{ssv}}}\n")
+                    else:
+                        f.write(f"\\newcommand{{\\{key}{sub_key}}}{{{sub_value}}}\n")
+            else:
+                if isinstance(value, str):
+                    f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+                else:
+                    f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")

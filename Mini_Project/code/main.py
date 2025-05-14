@@ -1,13 +1,19 @@
 # %%
-import data
-import estimate
-import os
+import time
 import logging
 import toml
-from importlib import reload
-import time
-from utils import *
 
+import pandas as pd
+import numpy as np
+
+from tqdm import tqdm
+from importlib import reload
+
+import estimate
+import data
+import utils
+
+# %%
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,26 +48,7 @@ def convert_to_latex_macros(dictionary, prefix=""):
 # Generate LaTeX macros
 latex_macros = convert_to_latex_macros(params)
 
-# Save to a LaTeX file
-with open("../variables.tex", "w") as f:
-    for key, value in params.items():
-
-        if isinstance(value, dict):  # Handle nested sections
-            for sub_key, sub_value in value.items():
-                if isinstance(sub_value, list):
-                    value_str = ", ".join(map(str, sub_value))
-                    f.write(
-                        f"\\newcommand{{\\params{key}x{sub_key}}}{{\\{{{value_str}\\}}}}\n"
-                    )
-                else:
-                    f.write(f"\\newcommand{{\\params{key}x{sub_key}}}{{{sub_value}}}\n")
-        else:
-            key = "params" + key
-            if isinstance(value, str):
-                f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
-            else:
-                f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
-
+utils.write_params(params, file_path="../variables.tex", prefix="params")
 print("variables.tex has been generated!")
 # %%
 default_seed = 14_273
@@ -91,7 +78,7 @@ if len(dfs) == 0:
 df = pd.concat(dfs, ignore_index=True)
 
 # %% Plot descriptive stats
-plot_descriptive_stats(df)
+utils.plot_descriptive_stats(df)
 
 # %%
 reload(estimate)
@@ -101,7 +88,7 @@ DM.initialize()
 # %%
 DM.fit(theta0=np.array([4, 1]))
 DM.print_results()
-
+utils.write_params(DM.est_params, file_path="../estimates.tex", prefix="paramsEst")
 # %%
 # DM.run_regulation_counterfactual()
 output_folder = "/Users/vbp/Princeton Dropbox/Veronica Backer Peral/Apps/Overleaf/econ273/Mini_Project/figures"

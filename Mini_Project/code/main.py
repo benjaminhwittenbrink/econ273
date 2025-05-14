@@ -53,7 +53,7 @@ with open("../variables.tex", "w") as f:
 
 print("variables.tex has been generated!")
 # %%
-default_seed = 273
+default_seed = 14_273
 N_iters = 1
 
 dfs = []
@@ -93,6 +93,7 @@ DM.print_results()
 
 # %%
 # DM.run_regulation_counterfactual()
-DM.run_amenity_counterfactual()
+output_folder = "/Users/vbp/Princeton Dropbox/Veronica Backer Peral/Apps/Overleaf/econ273/Mini_Project/figures"
+DM.run_amenity_counterfactual(output_folder)
 
 # %%

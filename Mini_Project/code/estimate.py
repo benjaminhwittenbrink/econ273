@@ -478,12 +478,10 @@ class DiamondModel:
             plt.legend()
             plt.show()
 
-    def run_amenity_counterfactual(self):
+    def run_amenity_counterfactual(self, output_folder):
         """
         Run a counterfactual simulation where endogenous amenity is fixed.
         """
-
-        df = self.data
 
         # ----------------------------------------------------------
         # Update parameters
@@ -526,55 +524,150 @@ class DiamondModel:
             "Log Rent",
         ]
 
-        # Plot difference
-        for i, var in enumerate(vars):
+        shocks = ["Z_H", "Z_L"]
+        labels = [
+            "High Skill Demand Shock",
+            "Low Skill Demand Shock",
+        ]
 
-            x_axis = DD_endog_amenity[var].to_numpy()
+        for i, shock in enumerate(shocks):
+            y_axis_var_labels = [
+                "Log High Ed Population",
+                "Log Low Ed Population",
+                "Log Rent",
+            ]
 
-            var_update = DD_update[var]
-            var_original = DD_original[var]
-            var_amenity = DD_endog_amenity[var]
+            for j, y_axis_var in enumerate(["Log_H", "Log_L", "Log_Rent"]):
+                x_axis = np.log(DD_endog_amenity[shock].to_numpy())
+                var_update = DD_update[y_axis_var]
+                var_amenity = DD_endog_amenity[y_axis_var]
 
+                plt.figure(figsize=(10, 6))
+                plt.scatter(
+                    x_axis,
+                    var_amenity,
+                    alpha=0.5,
+                    color="blue",
+                    label="Endogenous Amenity",
+                )
+                plt.scatter(
+                    x_axis,
+                    var_update,
+                    alpha=0.5,
+                    color="red",
+                    label="Exogenous Amenity",
+                )
+
+                # Plot best fit line
+                z = np.polyfit(x_axis, var_amenity, 1)
+                p = np.poly1d(z)
+                plt.plot(x_axis, p(x_axis), color="blue")
+
+                z = np.polyfit(x_axis, var_update, 1)
+                p = np.poly1d(z)
+                plt.plot(x_axis, p(x_axis), color="red")
+
+                plt.xlabel(f"{labels[i]}")
+                plt.ylabel(y_axis_var_labels[j])
+                plt.grid()
+                plt.legend()
+                plt.savefig(
+                    f"{output_folder}/scatter_{labels[i]}_{y_axis_var}.png",
+                    bbox_inches="tight",
+                    dpi=300,
+                )
+                plt.show()
+
+        # Plot histogram of High_Ed_Share in DD_update vs DD_endog_amenity
+        var_labels = [
+            "High Skill Population",
+            "Low Skill Population",
+            "High Skill Share of Population",
+            "Log Rent",
+        ]
+        for i, var in enumerate(
+            [
+                "High_Ed_Population",
+                "Low_Ed_Population",
+                "High_Ed_Share",
+                "Log_Rent",
+            ]
+        ):
             plt.figure(figsize=(10, 6))
-            # plt.scatter(
-            #     x_axis, var_original, alpha=0.5, color="blue", label="True Params"
-            # )
-            plt.scatter(
-                x_axis,
-                var_update,
+            plt.hist(
+                DD_update[var],
+                bins=30,
                 alpha=0.5,
                 color="red",
-                label="Estimated Params",
+                label="Exogenous Amenity",
+                density=True,
             )
-            # plt.scatter(
-            #     x_axis,
-            #     var_amenity,
-            #     alpha=0.5,
-            #     color="green",
-            #     label="Endogenous Amenity",
-            # )
-
-            # Plot best fit line
-            # z = np.polyfit(x_axis, var_original, 1)
-            # p = np.poly1d(z)
-            # plt.plot(x_axis, p(x_axis), color="blue")
-
-            z = np.polyfit(x_axis, var_update, 1)
-            p = np.poly1d(z)
-            plt.plot(x_axis, p(x_axis), color="red")
-
-            # z = np.polyfit(x_axis, var_amenity, 1)
-            # p = np.poly1d(z)
-            # plt.plot(x_axis, p(x_axis), color="green")
-
-            # Plot 45 degree line
-            plt.plot(x_axis, x_axis, color="black", linestyle="-")
-
-            plt.xlabel(f"{labels[i]} (endog)")
-            plt.ylabel(f"{labels[i]}")
-            plt.grid()
+            plt.hist(
+                DD_endog_amenity[var],
+                bins=30,
+                alpha=0.5,
+                color="blue",
+                label="Endogenous Amenity",
+                density=True,
+            )
+            plt.xlabel(f"{var_labels[i]}")
+            plt.ylabel("Frequency")
             plt.legend()
+            plt.grid()
+            plt.savefig(
+                f"{output_folder}/histogram_{var}.png", bbox_inches="tight", dpi=300
+            )
             plt.show()
+
+        # Plot difference
+        # for i, var in enumerate(vars):
+
+        #     x_axis = DD_endog_amenity[var].to_numpy()
+
+        #     var_update = DD_update[var]
+        #     var_original = DD_original[var]
+        #     var_amenity = DD_endog_amenity[var]
+
+        #     plt.figure(figsize=(10, 6))
+        #     # plt.scatter(
+        #     #     x_axis, var_original, alpha=0.5, color="blue", label="True Params"
+        #     # )
+        #     plt.scatter(
+        #         x_axis,
+        #         var_update,
+        #         alpha=0.5,
+        #         color="red",
+        #         label="Estimated Params",
+        #     )
+        #     # plt.scatter(
+        #     #     x_axis,
+        #     #     var_amenity,
+        #     #     alpha=0.5,
+        #     #     color="green",
+        #     #     label="Endogenous Amenity",
+        #     # )
+
+        #     # Plot best fit line
+        #     # z = np.polyfit(x_axis, var_original, 1)
+        #     # p = np.poly1d(z)
+        #     # plt.plot(x_axis, p(x_axis), color="blue")
+
+        #     z = np.polyfit(x_axis, var_update, 1)
+        #     p = np.poly1d(z)
+        #     plt.plot(x_axis, p(x_axis), color="red")
+
+        #     # z = np.polyfit(x_axis, var_amenity, 1)
+        #     # p = np.poly1d(z)
+        #     # plt.plot(x_axis, p(x_axis), color="green")
+
+        #     # Plot 45 degree line
+        #     plt.plot(x_axis, x_axis, color="black", linestyle="-")
+
+        #     plt.xlabel(f"{labels[i]} (endog)")
+        #     plt.ylabel(f"{labels[i]}")
+        #     plt.grid()
+        #     plt.legend()
+        #     plt.show()
 
     def print_results(self, est_params=None):
 

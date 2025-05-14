@@ -38,15 +38,15 @@ White = 1.5
 Black = 0.9
 
 [beta_w]
-White = 1.8
+White = 1.5
 Black = 2.2
 
 # Demographics
 [H]
 [H.Black]
-N = 20
+N = 40
 [H.White]
-N = 80
+N = 160
 
 [L]
 [L.Black]

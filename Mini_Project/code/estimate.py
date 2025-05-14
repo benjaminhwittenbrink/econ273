@@ -512,8 +512,13 @@ class DiamondModel:
             return DD
 
         DD_update = resimulate_data(update_params=True).to_dataframe()
-        DD_original = resimulate_data(update_params=False).to_dataframe()
+        # DD_original = resimulate_data(update_params=False).to_dataframe()
         DD_endog_amenity = self.data
+
+        DD_update["Wage_Gap"] = DD_update["Log_Wage_H"] - DD_update["Log_Wage_L"]
+        DD_endog_amenity["Wage_Gap"] = (
+            DD_endog_amenity["Log_Wage_H"] - DD_endog_amenity["Log_Wage_L"]
+        )
 
         vars = ["Log_Wage_H", "Log_Wage_L", "Log_H", "Log_L", "Log_Rent"]
         labels = [
@@ -584,6 +589,8 @@ class DiamondModel:
             "Low Skill Population",
             "High Skill Share of Population",
             "Log Rent",
+            "Endogenous Amenity",
+            "Wage Gap",
         ]
         for i, var in enumerate(
             [
@@ -591,6 +598,8 @@ class DiamondModel:
                 "Low_Ed_Population",
                 "High_Ed_Share",
                 "Log_Rent",
+                "Amenity_Endog",
+                "Wage_Gap",
             ]
         ):
             plt.figure(figsize=(10, 6))

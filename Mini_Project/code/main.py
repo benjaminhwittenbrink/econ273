@@ -45,11 +45,22 @@ latex_macros = convert_to_latex_macros(params)
 # Save to a LaTeX file
 with open("../variables.tex", "w") as f:
     for key, value in params.items():
-        key = "params_" + key
-        if isinstance(value, str):
-            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+
+        if isinstance(value, dict):  # Handle nested sections
+            for sub_key, sub_value in value.items():
+                if isinstance(sub_value, list):
+                    value_str = ", ".join(map(str, sub_value))
+                    f.write(
+                        f"\\newcommand{{\\params{key}x{sub_key}}}{{\\{{{value_str}\\}}}}\n"
+                    )
+                else:
+                    f.write(f"\\newcommand{{\\params{key}x{sub_key}}}{{{sub_value}}}\n")
         else:
-            f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+            key = "params" + key
+            if isinstance(value, str):
+                f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
+            else:
+                f.write(f"\\newcommand{{\\{key}}}{{{value}}}\n")
 
 print("variables.tex has been generated!")
 # %%

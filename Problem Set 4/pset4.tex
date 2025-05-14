@@ -68,6 +68,8 @@ Scrap values and entry costs are privately observed, but $C$ and the distributio
 
 \begin{answer}
 First note that the static duopoly game has the following solution: for $A>0$, $q_{it}=1$ is a strictly dominant strategy for each firm so there is a unique equilibrium of $q_{it}=1,q_{-it}=1$ yielding profits of $2A-B$ to each firm.
+
+
 Then for each state $s$ we write the value function of the firm $i$ as the max of exiting/staying out of the market vs. entering/staying in the market plus the implied continuation value for that choice. For example, for $s = (0,0)$, the value of staying out is just the continuation value while the value of entering is the up front cost $-(C + \psi_{it})$ plus the continuation value. That is:
 \[
   V(s,\varepsilon_i)
@@ -135,6 +137,8 @@ and the additional payoff $\varepsilon_i(a_i)$ from the entry or exit decision i
 \item Let $(A, B, C) = (0.3, 0.6, 0.15)$. Solve for the game’s equilibrium by finding the roots to a system of non-linear equations.
 
 \textit{Hint:} You should have eight equations in eight unknowns. The eight equations include four Bellman equations and four indifference/choice probability equations; the eight unknowns include four $V(s)$ and four cut-offs/choice probabilities.
+   
+    If solving for cut-offs, derive choice probabilities in the last step.
 
 \begin{answer}
 
@@ -203,10 +207,30 @@ Therefore, we end up with 8 equations and 8 unknowns. We rewrite the 8 equations
 \end{align}
 where $\tilde{V}_{ij}\equiv\tilde{V}(i,j)$, $\pi_{ij}\equiv\pi_{i}(i,j)$ $p_{ij}\equiv p_{-i}(i,j)$ and $q_{ij}\equiv 1-p_{-i}(i,j)$
 
+
+We solve the system of equations numerically for the conjectured parameters via a root finder. In particular, we conjecture values of our 8 unknowns (the LHSs of equations 1-8) and use those equations to get updated values.
+
+We find the following solution:
+\begin{figure}[h]
+\centering
+\caption{Solution to Dynamic Game}
+\begin{tabular}{l|r}  
+Parameter & Solution \\ \hline
+$V_{00}$ & 0.65 \\
+$V_{01}$ & 0.59 \\
+$V_{10}$ & 1.89 \\
+$V_{11}$ & 1.21 \\
+$p_{00}$ & 0.56 \\
+$p_{01}$ & 0.76 \\
+$p_{10}$ & 0.46 \\
+$p_{11}$ & 0.66 \\
+ \end{tabular}
+\end{figure}
+
+This solution is intuitive: the firms prefer to be acting as monopolists (1,0) to duopolists (1,1), and both are better than not having entered at all, but the continuation value is more appealing when the other firm has also not entered $V_{00}>V_{01}$ since the probability they enter in the subsequent period is lower. 
 \end{answer}
 
 
-    If solving for cut-offs, derive choice probabilities in the last step.
 
     \item Generate data from your solution in (2), where you derived choice probabilities conditional on the four possible states. Read \textit{“Asymptotic Least Squares Estimators for Dynamic Games”} by Pesendorfer and Schmidt-Dengler and implement their estimator.
 
@@ -215,6 +239,33 @@ where $\tilde{V}_{ij}\equiv\tilde{V}(i,j)$, $\pi_{ij}\equiv\pi_{i}(i,j)$ $p_{ij}
     Once you have $V(\hat{p}, \theta)$, you can obtain guesses for the choice-specific value functions and choice probabilities $\tilde{p}(\hat{p}, \theta)$, build a least square objective function over deviations from observed choice probabilities $\hat{p} - \tilde{p}(\hat{p}, \theta)$, and search over unknown parameters $\theta = (A,B,C)$ that minimize these deviations.
 
 \begin{answer}
+
+First, we simulate the data. We initialize the state at $(0,0)$. Then, we simulate state $s_t$ by drawing $\phi_t, \psi_t$ for each firm, and choose whether to enter or exit in the following period using the solutions to the system of equations above, the $\phi,\psi$ draws, and the existing state. We simulate this for 100,000 time periods. 
+
+Next we implement the estimator of Pesendorfer and Schmidt-Dengler. This estimator proceeds in two steps 
+
+\begin{enumerate}
+\item Estimate $p_{i,j}$ using empirical frequency. In particular, let $a_{i}^t$ denote the entry decision of firm $i$ in period $t$, equal to 1 iff they enter, and let $s_i^t$ denote the state \textit{relative} to agent $i$: that is, if the agent is $1$ and the state is $(1,0)$, $s_i^t = (1,0)$, while if the agent is $2$ and the state is $(0,1)$, $s_i^t = (1,0)$. We estimate $$\hat{p}(s) = \frac{ \sum_{i\in\{0,1\}}\sum_t I\{a_i^t=1,s_i^t=s\}}{\sum_{a\in\{0,1\}} \sum_{i\in\{0,1\}}\sum_t I\{a_i^t=1,s^t=s\}}$$ for each of the four states $s$
+
+\item For conjectured values of $A,B,C$, we solve the model as in part (2). This yields model-implied values of $\tilde p(s)$ for each of the four states. We form the moment condition $$ M=E[\tilde{p}(s)-\hat{p}(s)]=0,\forall s$$
+
+and choose $\tilde{A},\tilde{B},\tilde{C}$ to minimize the GMM objective function $$\hat{M}^\prime W \hat{M},$$, where $\hat{G}$ is the sample analogue of $M$. We do our estimation via two-step: in the first step, $W=I_{4}$. In the second step, since entry is i.i.d. Bernoulli conditional on the state, we simply have $\hat W = \frac{1}{4}\hat{\Sigma}^{-1}$ where $\hat{\Sigma}$ has $  \frac{\hat{p}(s)(1-\hat{p}(s))}{n_s}$ in the $s,s$th component and 0 otherwise, for $n_s$ the number of observations with state $s$. We also compute standard errors using the method in Pesendorfer and Schmidt-Dengler.
+
+
+\begin{figure}[h]
+\centering
+\caption{Estimated Parameters,  Pesendorfer and Schmidt-Dengler Estimator}
+\begin{tabular}{l|rr r }  
+& A & B & C \\
+\hline
+
+True Value  & 0.300 &0.600& 0.150 \\ 
+Estimated Value& 0.294 &0.578& 0.152 \\ 
+Standard Error & 0.009 &0.031&  0.007
+ \end{tabular}
+\end{figure}
+
+\end{enumerate}
 \end{answer}
     
 \end{enumerate}

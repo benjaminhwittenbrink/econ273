@@ -140,3 +140,28 @@ def plot_descriptive_stats(df):
         plt.legend()
         plt.grid()
         plt.plot()
+
+        # Rent scatter
+        plt.figure(figsize=(10, 6))
+        plt.scatter(
+            df_plot[var],
+            df_plot["Log_Rent"],
+            alpha=0.5,
+            color="blue",
+        )
+        # Plot best fit line
+        z = np.polyfit(df_plot[var], df_plot["Log_Rent"], 1)
+        p = np.poly1d(z)
+        plt.plot(
+            df_plot[var],
+            p(df_plot[var]),
+            color="blue",
+            alpha=0.5,
+        )
+
+        plt.title(f"{var} vs Log Rent")
+        plt.xlabel(var)
+        plt.ylabel("Log Rent")
+        plt.legend()
+        plt.grid()
+        plt.plot()

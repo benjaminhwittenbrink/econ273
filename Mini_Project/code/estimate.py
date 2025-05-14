@@ -69,8 +69,9 @@ class DiamondModel:
 
     # -------------------------------------------------------------------------
     #  Moment-condition builders
+    #  Moment-condition builders
     # -------------------------------------------------------------------------
-    def _labor_demand_parameters(self) -> np.ndarray:
+    def _labor_demand_parameters(self) -> None:
         """
         Run 2SLS regression to get labor demand parameters:
         Log_Wage_H = gamma_HH * log(High_Ed_Population) + gamma_HL * log(Low_Ed_Population) + epsilon_H

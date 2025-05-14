@@ -6,13 +6,28 @@ import pandas as pd
 import datetime as dt
 from scipy.optimize import least_squares
 from tqdm import tqdm
+from typing import Tuple, Dict, List, Any, Optional, NamedTuple
 
 logger = logging.getLogger(__name__)
 
 
+class DiamondEquilibrium(NamedTuple):
+    L: np.ndarray
+    H: np.ndarray
+    wage_L: np.ndarray
+    wage_H: np.ndarray
+    rent: np.ndarray
+    amenity_endog: np.ndarray
+
+
 class DiamondData:
 
-    def __init__(self, params, seed=123, verbose=True):
+    def __init__(
+        self,
+        params: Dict[str, List[str] | str | float],
+        seed: Optional[int] = 123,
+        verbose: Optional[bool] = True,
+    ) -> None:
         self.seed = seed
         np.random.seed(seed)
 
@@ -25,7 +40,7 @@ class DiamondData:
                 params[key] = np.array(params[key])
 
     ### I/O Methods
-    def write(self, file_dir=None):
+    def write(self, file_dir: str = None) -> None:
         """
         Write the class and data to a folder.
         Folders will be of the form ../data/DiamondData_<seed>_<datetime>
@@ -43,7 +58,7 @@ class DiamondData:
         city_df.to_csv(out_dir + "DiamondCityData.csv", index=False)
         logger.info(f"Saved {self.__class__.__name__} to {out_dir}")
 
-    def to_dataframe(self):
+    def to_dataframe(self) -> pd.DataFrame:
         """
         Convert the simulation results to a pandas DataFrame.
         """
@@ -71,12 +86,12 @@ class DiamondData:
         return pd.DataFrame(city_data)
 
     ### Public Methods
-    def simulate(self):
+    def simulate(self) -> None:
         self._simulate_exog()
         self._simulate_endog()
 
     ### Private Methods
-    def _simulate_exog(self):
+    def _simulate_exog(self) -> None:
         """
         Simulate exogenous variables: housing supply, population demographics, amenities, and shocks.
         """
@@ -95,7 +110,7 @@ class DiamondData:
             self.params["x_geo"]["mu"], self.params["x_geo"]["sigma"], self.params["J"]
         )
 
-        # Construction costs (time-varying)
+        # Construction costs
         self.construction_costs = np.random.lognormal(
             self.params["CC"]["mu"], self.params["CC"]["sigma"], self.params["J"]
         )
@@ -153,14 +168,14 @@ class DiamondData:
             self.params["J"],
         )
 
-    def _simulate_endog(self):
+    def _simulate_endog(self) -> None:
         """
         Simulate endogenous variables: wages, labor supplies, prices, amenity levels.
-        Where j is the city and t is the time period.
         """
 
-        # initialize guess for wages, rents, and amenities
+        # initialize guess for wages (H, L), rents, and amenities for each city
         init = np.concatenate([np.ones(self.params["J"]) for _ in range(4)])
+        # estimate equilibrium prices and shares using least squares optimization
         sol = least_squares(
             self._solve_prices,
             init,
@@ -168,29 +183,33 @@ class DiamondData:
             ftol=1e-6,
             gtol=1e-6,
         )
-
-        if not sol.success:
-            logger.warning("Fixed point did not converge.")
-
         wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq = np.split(sol.x, 4)
 
-        L_eq, H_eq, wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq = (
-            self._find_equilibrium(wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq)
-        )
-        self.L, self.H = L_eq, H_eq
-        self.population = L_eq + H_eq
-        self.wage_L, self.wage_H = wage_L_eq, wage_H_eq
-        self.rent = rent_eq
-        self.amenity_endog = amenity_endog_eq
+        if not sol.success:
+            logger.warning("Equilibrium price optimization did not converge.")
+            logger.warning(f"Optimization message: {sol.message}")
 
-    def _solve_prices(self, init):
+        eq = self._find_equilibrium(wage_L_eq, wage_H_eq, rent_eq, amenity_endog_eq)
+        self.L, self.H = eq.L, eq.H
+        self.population = eq.L + eq.H
+        self.wage_L, self.wage_H = eq.wage_L, eq.wage_H
+        self.rent = eq.rent
+        self.amenity_endog = eq.amenity_endog
+
+    def _solve_prices(self, x: np.ndarray) -> np.ndarray:
         """
-        Get equilibrium prices and shares.
+        Get equilibrium wages (H, L), rents, and endogenous amenities.
+        This function is used by least_squares to find the equilibrium prices, so returns
+        the difference between the new and old quantities.
         """
         self.delta = {}
-        wage_L, wage_H, rent, amenity_endog = np.split(init, 4)
-        _, _, wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
-            self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
+        wage_L, wage_H, rent, amenity_endog = np.split(x, 4)
+        eq = self._find_equilibrium(wage_L, wage_H, rent, amenity_endog)
+        wage_L_new, wage_H_new, rent_new, amenity_endog_new = (
+            eq.wage_L,
+            eq.wage_H,
+            eq.rent,
+            eq.amenity_endog,
         )
         return np.concatenate(
             [
@@ -201,7 +220,13 @@ class DiamondData:
             ]
         )
 
-    def _find_equilibrium(self, wage_L, wage_H, rent, amenity_endog):
+    def _find_equilibrium(
+        self,
+        wage_L: np.ndarray,
+        wage_H: np.ndarray,
+        rent: np.ndarray,
+        amenity_endog: np.ndarray,
+    ) -> DiamondEquilibrium:
         """
         For a given set of prices/amenities, find the equilibrium population.
         Then, find the prices that those populations would imply.
@@ -218,7 +243,6 @@ class DiamondData:
             + self.params["alpha_HL"] * np.log(self.Z_L)
             + self.epsilon_H
         )
-
         wage_L = (
             self.params["gamma_LH"] * np.log(H)
             + self.params["gamma_LL"] * np.log(L)
@@ -227,14 +251,45 @@ class DiamondData:
             + self.epsilon_L
         )
 
+        # Calculate rents based on population and wages
         rent = self._solve_rents(H, L, wage_H, wage_L)
 
         # Update amenities given population
         amenity_endog = self.params["phi_a"] * np.log(H / L) + self.epsilon_a
+        return DiamondEquilibrium(L, H, wage_L, wage_H, rent, amenity_endog)
 
-        return L, H, wage_L, wage_H, rent, amenity_endog
+    def _calculate_population(
+        self,
+        wage: np.ndarray,
+        rent: np.ndarray,
+        amenity_endog: np.ndarray,
+        edu: str = "H",
+    ) -> np.ndarray:
+        """
+        Calculate population for each city given education level.
+        """
+        # For each type of individual, calculate the probability of being in each city
+        tot_pop = np.zeros(self.params["J"])
+        for race in self.params["race_types"]:
+            # calculate mean utility for each city for each race
+            delta = self._get_delta(wage, rent, amenity_endog, race=race)
+            self.delta[(edu, race)] = delta
+            # calculate population for each city for each race
+            pop = self._calculate_group_population(
+                delta,
+                edu,
+                race,
+                beta_st=self.params["beta_st"],
+                prob=self.prob_from_state,
+            )
+            self.city_population[(edu, race)] = pop
+            tot_pop += pop
 
-    def _calculate_group_population(self, delta, edu, race, beta_st, prob):
+        return tot_pop
+
+    def _calculate_group_population(
+        self, delta: np.ndarray, edu: str, race: str, beta_st: float, prob: np.ndarray
+    ) -> np.ndarray:
         """
         Calculate population for each group given delta.
         """
@@ -258,30 +313,13 @@ class DiamondData:
         pop = (term1 + term2) * self.total_population[(edu, race)]
         return pop
 
-    def _calculate_population(self, wage, rent, amenity_endog, edu="H"):
-        """
-        Calculate population for each city given demographic.
-        """
-
-        # For each type of individual, calculate the probability of being in each city
-        tot_pop = np.zeros(self.params["J"])
-        for race in self.params["race_types"]:
-            delta = self._get_delta(wage, rent, amenity_endog, race=race)
-            self.delta[(edu, race)] = delta
-
-            pop = self._calculate_group_population(
-                delta,
-                edu,
-                race,
-                beta_st=self.params["beta_st"],
-                prob=self.prob_from_state,
-            )
-            self.city_population[(edu, race)] = pop
-            tot_pop += pop
-
-        return tot_pop
-
-    def _get_delta(self, wage, rent, amenity_endog, race="White"):
+    def _get_delta(
+        self,
+        wage: np.ndarray,
+        rent: np.ndarray,
+        amenity_endog: np.ndarray,
+        race: str = "White",
+    ) -> np.ndarray:
         """
         Calculate delta (average utility) for each city given wage and rent.
         """
@@ -291,25 +329,17 @@ class DiamondData:
             + self.amenity_exog * self.params["beta_x"][race]
         )
 
-    def _solve_rents(self, H, L, wage_H, wage_L, tol=1e-6):
+    def _solve_rents(
+        self, H: np.ndarary, L: np.ndarray, wage_H: np.ndarray, wage_L: np.ndarary
+    ) -> np.ndarray:
         """
-        Find the fixed point for rent given the population and wages.
+        Calculate rents based on closed form expression using population and wages.
         """
-        J = self.params["J"]
-        x0 = np.concatenate([np.ones(J), np.ones(J)])
-
         M = self.params["zeta"] * (L * np.exp(wage_L) + H * np.exp(wage_H))
         M = np.clip(M, 1e-6, None)
-
         rent = (1 / (1 + self.phi)) * (
             np.log(self.params["iota"])
             + np.log(self.construction_costs)
             + self.phi * np.log(M)
         )
         return rent
-
-    def _convergence_check(self, x, x_new, tol):
-        """
-        Check for convergence.
-        """
-        return np.max(np.abs(x_new - x)) < tol

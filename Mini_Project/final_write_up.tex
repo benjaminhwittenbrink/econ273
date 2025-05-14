@@ -9,8 +9,15 @@
 \renewcommand{\footrulewidth}{0pt} % remove footer rule if desired
 % read in parameters
 
+\usepackage{xcolor}
+\usepackage[colorlinks=true,
+            linkcolor=blue!50!black,     % Section links (dark blue)
+            citecolor=green!50!black,    % Citations (light green)
+            urlcolor=blue!70             % URLs (light blue)
+           ]{hyperref}
 
-\title{14.273 IO Mini-Project}
+
+\title{\vspace{-2.5cm}14.273 IO Mini-Project}
 \author{Benjamin Wittenbrink, Jack Kelly, and Verónica Bäcker-Peral}
 
 \begin{document}
@@ -19,8 +26,10 @@
 
 \section{Motivation}
 
-Over the past decades, the wage gap between high school and college graduates has significantly widened, accompanied by a pronounced geographic sorting of workers by skill. Metropolitan areas with a high concentration of college-educated residents have further increased their share of such workers between 1980 and 2000. This phenomenon, often referred to as ``the Great Divergence," has seen high-skill cities experience both robust wage growth and soaring housing costs. Such trends raise important questions about whether higher wages for college graduates have translated into improved economic well-being, given the offsetting effects of elevated local prices. While higher housing (and lifestyle) costs may diminish consumption benefits, the attractive amenities in these cities could potentially enhance overall worker welfare. In this project, we exposit, simulate, and estimate the empirical model in Diamond (2016): ``The Determinants and Welfare Implications of US Workers' Diverging Location Choices by Skill: 1980-2000." Here, we present the model, with slight simplifications, that we will use for simulation and estimation. 
-In particular, the paper uses a structural spatial equilibrium model to examine the determinants of this geographic sorting of workers by skill and the corresponding welfare implications. The key feature is that wages, prices, amenities are all codetermined by the balance of high and low skilled workers who endogenously move to a given area. 
+Over the past decades, the wage gap between high school and college graduates has significantly widened, accompanied by a pronounced geographic sorting of workers by skill. Metropolitan areas with a high concentration of college-educated residents have further increased their share of such workers between 1980 and 2000. This phenomenon, often referred to as ``the Great Divergence," has seen high-skill cities experience both robust wage growth and soaring housing costs. In an influential paper, Diamond (2016) develops a structural spatial equilibrium model to examine the determinants of this geographic sorting of workers by skill and the corresponding welfare implications. The key feature is that wages, prices, amenities are all codetermined by the balance of high and low skilled workers who endogenously move to a given area. In this project, we exposit, simulate, and estimate a simplified version of Diamond's empirical model. We then use the results to simulate the effects of a widely discussed policy counterfactual: XX
+
+
+%Such trends raise important questions about whether higher wages for college graduates have translated into improved economic well-being, given the offsetting effects of elevated local prices. While higher housing (and lifestyle) costs may diminish consumption benefits, the attractive amenities in these cities could potentially enhance overall worker welfare. In this project, we exposit, simulate, and estimate the empirical model in Diamond (2016): ``The Determinants and Welfare Implications of US Workers' Diverging Location Choices by Skill: 1980-2000." Here, we present the model, with slight simplifications, that we will use for simulation and estimation. 
 
 \section{Model}
 
@@ -31,13 +40,13 @@ We model three markets that clear simultaneously: labor, housing, and an endogen
 
 \subsection{Labor Demand}
 
-We assume, following Diamond, the following log-linear labor demand curves for high and low education types: 
+Following Diamond, we assume log-linear labor demand curves for high and low education types: 
 \begin{align}
     w_{j}^H &= \gamma_{HH}\log H_{j} + \gamma_{HL} \log L_{j} + \varepsilon_{j}^H \label{eq_wage_h_aprx} 
     \\ 
     w_{j}^L &= \gamma_{LL}\log L_{j} + \gamma_{LH} \log H_{j} + \varepsilon_{j}^L \label{eq_wage_l_aprx} 
 \end{align}
- where $w_j^e$ represents log wages for each education level. These equations can be microfounded as approximating a model with homogeneous firms with a  production technology that is Cobb-Douglas in capital and a labor aggregator, which is CES between high and low skill types; details of the microfoundation are in Appendix A. Importantly, in this model the elasticities $\gamma$ may capture both classical labor demand forces  -- in which higher wages lead to lower quantities demanded of labor -- and ``spillover" effects whereby the mix of high and low skill types affects endogenous productivity. 
+ where $w_j^e$ represents log wages for each education level ($e\in \{H, L\}$). These equations can be microfounded as approximating a model with homogeneous firms with a  production technology that is Cobb-Douglas in capital and a labor aggregator, which is CES between high and low skill types; details of the microfoundation are in Appendix A. Importantly, in this model the elasticities $\gamma$ may capture both classical labor demand forces  -- in which higher wages lead to lower quantities demanded of labor -- and ``spillover" effects whereby the mix of high and low skill types affects endogenous productivity. 
 
 \subsection{Labor Supply and Amenity Demand }
 
@@ -45,23 +54,21 @@ We assume, following Diamond, the following log-linear labor demand curves for h
 To focus on the geographic sorting of workers, the model abstracts from endogenous labor supply in the sense of choosing hours worked or occupation type. Rather, the sole dimension of labor supply choice is where to live and work. Since this also depends on the level of amenities in a given location, it further serves as the demand side of our amenity market.
 
 In particular, we posit population shares of the form 
-\begin{align}\label{eq: population shares} 
-H_{j} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd}^H + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd}^H + \beta_d^{st}st_{ik})} \\
-L_{j} &= \sum_{i\in\mc{L}} \frac{\exp(\delta_{jd}^L + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd}^L + \beta_d^{st}st_{ik})}
+\begin{align}
+H_{jd} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd}^H + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd}^H + \beta_d^{st}st_{ik})} \label{eq:H_share} \\
+L_{jd} &= \sum_{i\in\mc{L}} \frac{\exp(\delta_{jd}^L + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd}^L + \beta_d^{st}st_{ik})}\label{eq:L_share}
 \end{align}
+where $\delta_{jd}^X$ represents the utility value of the components of the city $j$ which all workers of race $d$ and education level $e$ value identically and $st_{ij}$ corresponds to an indicator for whether a location is an individual's origin. The mean utilities take the form 
+\begin{equation}\label{eq:delta_X} \delta_{jd}^X = (w_{j}^e - \zeta r_{j})\beta_d^w + \beta^a_d a_{j} + \beta^x_d x_{j}^A \end{equation}
 
-where  $\delta_{jd}^X$ as the utility value of the components of the city $j$ which all workers of race $d$ and education level $e$ value identically and $\st_{ij}$ corresponds to an indicator for whether a location is an individual's origin. The mean utilities take the form 
-\begin{equation} \delta_{jd}^X = (w_{j}^e - \zeta r_{j})\beta_d^w + \beta^a_d a_{j} + \beta^x_d x_{j}^A \end{equation}
-
-where $r_j, w_j^e$ are log rents and (education-specific) wages, $a_j$ is an endogenous amenity, and $x_j^{A}$ is an (unobserved) exogenous amenity. In Appendix A, we show how  these equations emerges from individuals choosing to spend their earnings on a national vs a local good (housing), and then making a discrete location choice based on the corresponding indirect utility and type one extreme value preference shocks. The parameters to be estimated are workers' preferences, some of which we allow to be education or race specific -- $\zeta, \beta_d^w, \beta_d^a$, and $\beta_d^{st}$ ($\beta_d^x$ is the coefficient on an unobservable, so without loss, it is 1).  
+where $r_j$ and $w_j^e$ are log rents and education-specific wages, $a_j$ is an endogenous amenity, and $x_j^{A}$ is an unobserved exogenous amenity. In Appendix A, we show how  these equations emerge from individuals choosing to spend their earnings between a national and a local good (housing), and then making a discrete location choice based on the corresponding indirect utility and type one extreme value preference shocks. The parameters to be estimated are workers' preferences, some of which we allow to be education or race specific: $\zeta, \beta_d^w, \beta_d^a$, and $\beta_d^{st}$ ($\beta_d^x$ is the coefficient on an unobservable, so without loss, it is 1).  
 
 \subsection{Housing Demand}
 Housing demand is given by 
 \begin{equation} \label{eq: housing demand}  HD_{j}^* = L_{j}^* \frac{\zeta \exp(w_{j}^{L^*})}{\exp(r_{j}^*)} + H_{j}^* \frac{\zeta \exp(w_{j}^{H^*})}{\exp(r_{j}^*)} 
 \end{equation}
-
-Where $L_j^*, H_j^*$ come from the solutions of equations (3) and (4). The microfoundation is the same as the labor demand model, as detailed in Appendix A: individuals of education level $e$ choosing how to allocate their earnings housing versus the national good spend $\gamma \frac{\exp(w_j^e)}{\exp(r_j^e)}$ on housing, so total demand is given by the above. 
-
+where $L_j^*, H_j^*$ come from the solutions of equations \ref{eq:H_share} and \ref{eq:L_share}. The microfoundation is the same as in the labor demand model, as detailed in Appendix A: individuals of education $e$ choose how to allocate their earnings between housing and the national good and spend $\zeta \frac{\exp(w_j^e)}{\exp(r_j^e)}$ on housing.
+%, so total demand is given as above. 
 
 
 \subsection{Housing Supply}
@@ -70,9 +77,10 @@ Our housing supply equation is \begin{equation}\label{eq: housing supply}
     r_{j} = \log CC_{j} + \varphi_j \log HD_{j}.
 \end{equation}
 
+% TODO: should say what CC_j is
 In Appendix A we show how this arises from a model of competitve housing supply with marginal costs that depend on contruction and land costs. The elasticity term $\varphi_j$ varies by geography and regulation
-$$\varphi_j = \varphi + \varphi^{geo}x_j^{geo} + \varphi^{reg} x_j^{reg}$$
-This captures the fact that responses to changes in housing demand will be heterogeneous by city and depend on geographic constraints $x_j^{geo}$ (e.g., mountains, lakes, etc.) and regulatory constraints $x_j^{reg}$ (e.g., zoning laws, etc.). 
+$$\varphi_j = \varphi + \varphi^{geo}x_j^{geo} + \varphi^{reg} x_j^{reg}.$$
+This captures the fact that responses to changes in housing demand will be heterogeneous by city and depend on geographic constraints $x_j^{geo}$ (e.g., mountains, etc.) and regulatory constraints $x_j^{reg}$ (e.g., zoning laws, etc.). 
 
 \subsection{Amenity Supply}
 The endogenous amenity is chosen by cities and is a function of the employment ratio,
@@ -85,27 +93,29 @@ where $\varphi^a$ is the elasticity of amenity supply. Here, $a_{j}$ is an index
 \subsection{Equilibrium}
 An equilibrium in this model is a collection of (skill-specific) wages, rents, and amenities, $(w^{L^*},w^{H^*},r^*,a^*)$ and skill-specific labor supply levels $(H_{j}^*,L_{j}^*)$ subject to the following market clearing conditions 
 \begin{enumerate}
-\item Labor markets clear for each skill level in each location: Equations (1) and (2) and Equations (3) and (4) hold. 
-\item The housing market clears in each location: equations (6) and (7) hold.
+\item Labor markets clear for each skill level in each location: Equations \ref{eq_wage_h_aprx} and \ref{eq_wage_l_aprx} and Equations \ref{eq:H_share} and \ref{eq:L_share} hold. 
+\item The housing market clears in each location: Equations \ref{eq: housing demand} and \ref{eq: housing supply} hold.
 
 \item The amenity market clears in each location: 
-Equations (3), (4), and (8) hold. 
+Equations \ref{eq:H_share}, \ref{eq:L_share}, and \ref{eq: amenity supply} hold. 
 \end{enumerate}
 
 \section{Simulation Procedure}
 
-The model does not admit a closed form solution. Instead, we simulate the endogenous variables in our model through a simple fixed point procedure that uses our market clearing conditions. Table \ref{tab:parameter_values} lists our parameter values for our simulations. The broad strokes of our procedure are as follows: 
+
+The model does not admit a closed form solution. Instead, we simulate the endogenous variables in our model through a simple fixed point procedure that uses our market clearing conditions. Table \ref{tab:parameter_values} lists our parameter values for our simulations. A general outline of the procedure is as follows: 
 \begin{enumerate}
 \item Draw exogenous variables given our parameters. These are housing supply, population demographics, amenities, and shocks to productivity and amenities. 
-\item In the outer loop, we run a fixed point algorithm: for a given level of wages,  rents, and endogeneous amenities we can calculate the mean utility levels $\delta^z_{j}$ for each skill type $z$, which, together with the shocks, implies predicted population levels for each skill type according to equations (9) and (10). This in term implies new guesses of $w^H_{j}$ and $w^L_{j}$ using the labor supply equations (3) and (4), and implies a new level of amenities using the amenity supply equation (\ref{eq: amenity supply}).
+\item In the outer loop, run a fixed point algorithm: for a given level of wages, rents, and endogenous amenities, calculate the mean utility levels $\delta^z_{j}$ for each skill type $z$, which, together with the shocks, implies predicted population levels for each skill type according to equations \ref{eq:H_share} and \ref{eq:L_share}. This in term implies new guesses of $w^H_{j}$ and $w^L_{j}$ using the labor supply equations \ref{eq:H_share} and \ref{eq:L_share}, and implies a new level of amenities using the amenity supply equation (\ref{eq: amenity supply}).
 
-\item In the inner loop, we find the conjectured rent level corresponding to the conjectured wage level by numerically solving equations \ref{eq: housing supply} and \ref{eq: housing demand} to yield an updated guess for rents. 
+\item In the inner loop, find the conjectured rent level corresponding to the conjectured wage level by numerically solving equations \ref{eq: housing supply} and \ref{eq: housing demand} to yield an updated guess for rents. 
 \end{enumerate}
 
 
 
 \section{Estimation Procedure}
-We assume that we observe instruments affecting skill-specific wages are independent of any remaining unobservable determinants. In particular, for each education level $e\in \{H,L\} $ we assume (and simulate)
+We assume that we observe instruments affecting skill-specific wages that are independent of any remaining unobservable determinants. In particular, for each education level $e\in \{H,L\} $ we assume (and simulate)
+
  $$ w_{j}^e = \gamma_{eH}  \ln H_{j} + \gamma_{eL} \ln L_{j}+\alpha_{eH} Z_{j}^H  + \alpha_{eL} Z_{j}^L + \tilde{\varepsilon}_{jt}^e
  $$
 where $Z_j^H,Z_j^L \perp \tilde{\epsilon}_j^e$. Our instrument consist of these $Z^e_j$ variables, interacted with the housing cost shifters $x_j^{geo}$ and $x_j^{reg}$. Our moment conditions are those implied by our structural equations. Formally, we have
@@ -124,9 +134,11 @@ Our estimation procedure is as follows:
 
 \item At this point, we have conjectured values of all parameters, so we can form our moment conditions and take the empirical mean to form our GMM objective function. We run two-step GMM, in the first step using the identity matrix as weights in the first step, and in the second step using the inverse of the empirical residual matrix from the first step. 
 
-\section*{Results}
-Column 2 of Table 1 displays the results of our estimation procedure. We obtain precise estimates of all our true coefficient
 \end{enumerate}
+
+\section*{Results}
+Column 2 of Table 1 displays the results of our estimation procedure. We obtain precise estimates of all our estimable coefficients.
+\section*{Application: The Incidence of Zoning Reform in General Equilibrium}
 
 \section*{Tables and Figures}
 \begin{table}[h]
@@ -219,6 +231,113 @@ $\sigma_{Z_H}$ & \paramsparamsZLsigma \\
 \end{center}
 \end{table}
 
+\section*{Appendix}
+\subsection{Model Microfoundations}
+
+\subsubsection{Labor Demand}
+
+As in Diamond (2016), our labor demand equations (1) and (2) can be viewed as approximations to the following model: 
+Firms, $f$, in city $j$  produce a homogenous tradeable good using high skill labor, $H_{df}$, low skill labor, $L_{df}$, and capital, $K_{df}$. 
+
+Assume a production function that is Cobb Douglas in capital and a labor aggregate,
+\begin{equation*}\label{eq_prod_fn}
+    Y_{df} = N_{df}^\alpha K_{df}^{1-\alpha}
+\end{equation*}
+where $N_{df}=(\theta_{f}^L L_{df}^\rho + \theta_{f}^H H_{df}^\rho)^{1/\rho}$ and $\theta_{f}^e = f_e(H_{j},L_{j})\exp(\varepsilon_{j}^e)$ for $e \in\{H,L\}$. 
+This expression for the labor aggregate has two important features. First, while we assume a constant elasticity of substitution $\frac{1}{1-\rho}$ between high and low skill workers for tractability, we place no restrictions a priori on the value of $\rho$. Therefore, high and low skill workers may be complements $(\rho >1)$ or substitutes $(\rho <1)$. Second, the $\theta$ terms allow for productivity to depend on the mix of high and low skill workers. Again, while the multiplicative parametric form is assumed for tractability, the dependence of $\theta$ on high and low skilled labor is arbitrary, allowing (in principle) for rich interaction effects between workers.
+
+
+We assume the labor market is perfectly competitive, so wages are equal to the marginal product of labor and capital is supplied elastically at price $\kappa$. Together, these assumptions imply constant income shares for capital and (aggregate) labor. 
+
+Thus, firms' demand for labor and capital is,
+$$W_{j}^e = \alpha N_{fj}^{\alpha-\rho} K_{fj}^{1-\alpha} e_{fj}^{\rho-1}f_e(H_{j},L_{j})\exp(\varepsilon_{j}^X)$$
+$$\kappa = N_{fj}^\alpha K_{fj}^{-\alpha}(1-\alpha).$$
+Substituting in the equilibrium level of capital,
+\begin{equation*}\label{eq_wage_eq}
+    w_{j}^e = c + (1-\rho)\log N_{j} + (\rho-1)\log X_{j} + \log f_e(H_{j},L_{j}) + \varepsilon_{j}^e
+\end{equation*}
+where $c = \frac{1-\alpha}{\alpha} \log \frac{\alpha(1-\alpha)}{\kappa}$. Observe that we write these expressions at the city level because the production function is CRS. 
+% The city level aggregate labor is,
+% $$N_{j} = \left(\exp(\varepsilon_{j}^L)f_L(\cdot)L_{j}^\rho + \exp(\varepsilon_{j}^H)f_H(\cdot)H_{j}^\rho \right)^{1/\rho}$$ %% This is same as before but city level
+Therefore, labor supply impacts wages through two channels:
+\begin{enumerate}
+    \item Imperfect labor substitution within firms
+    \item City-wide productivity changes
+\end{enumerate}
+Rather than posit a functional form for the $f_{X}(\cdot)$'s, we then approximate wages by a log linear functional form, yielding equations (1) and (2):
+\begin{align}
+    w_{j}^H &= \gamma_{HH}\log H_{j} + \gamma_{HL} \log L_{j} + \varepsilon_{j}^H 
+    \\ 
+    w_{j}^L &= \gamma_{LL}\log L_{j} + \gamma_{LH} \log H_{j} + \varepsilon_{j}^L \label
+\end{align}
+
+This approximation does two things: first, it approximates the effect of $N_{j}$, since $\log(N_{j}) = \frac{1}{\rho}\log(\theta^L_{j} L^\rho_{dj} + \theta^H_{j} H^\rho_{dj})$; therefore, there is approximation error from estimating the log of sums with the sum of logs; for large $H_{j}, L_{j}$ that are of the same order of magnitude , this error is asymptotically constant as $\frac{\log(a+b)}{\log(a) + \log(b)} = \frac{\log(a + b)}{\log(ab )}$ tends to a constant if $a,b$ grow at the same rate. Secondly and more importantly, it approximates the functions $f_e(\cdot)$ that represent endogenous productivity from human capital spillovers that vary with the skill mix of local workers. If these functions are themselves Cobb Douglas ($f_e(\cdot) = K H_{j}^\nu L_{j}^\mu$ for some constants $K,\nu,\mu$, perhaps different for each $e$), this approximation is exact. 
+
+\subsubsection{Labor Supply, Amenity Demand, and Housing Demand }
+
+Again following Diamond, we jointly microfound location choice (equations (3) and (4)), which governs labor supply and amenity demand, and housing demand (equation (6)) as follows: 
+
+In particular, each city offers a high-skill and a low-skill wage ($W_{j,t}^X$ for $X \in \{H, L\}$). The worker consumes local good $\ell$ and national good $n$, which have prices $p^\ell_{j}$ and $p^n$ respectively. These goods should be thought of as indices for how the cost of living in a given city at a point in time compares to the national average; recall that a key question in this paper is whether or to what extent such cost of living differences erode the welfare gains of higher wages. Assuming a single composite local and national good is stylized, and as usual can be justified under two-step budgeting.
+
+Finally, the worker also receives utility from the vector of amenities, $A_{j}$. Importantly, there is both an exogenous amenity $x$ and an endogenous amenity $a$ -- the latter of which responds to migration patterns, and the former of which is unobservable.
+
+Workers have preferences that are Cobb-Douglas in  the local and national good and additively separable in amenities. They wish to maximize consumption subject to their budget constraint. The taste for local versus national goods is governed by $\zeta$, which we assume to be constant across workers for simplicity. Thus, workers solve 
+\begin{equation}\label{eq_worker_util_max}
+    \max_{\ell,n} \zeta \log \ell + (1-\zeta)\log n + s_i(A_{j})
+\end{equation}
+subject to $p^n n + p^\ell_{j}\ell\leq W^X_{j}$. The FOC are
+$$\frac{W^X_{j}\zeta}{p^\ell_{j}} = \ell$$
+$$\frac{W^X_{j}(1-\zeta)}{p^n} = n$$
+Substituting into the indirect utility function worker $i$ would receive from living in city $j$ in year $t$:
+\begin{align}
+    V_{ij} &= \log n - \zeta \log \frac{n}{\ell} + s_i(A_{j}) \nonumber \\ 
+    &= \log \frac{W^X_{j}}{p^n_{t}} - \zeta \log\frac{p^\ell_{j}}{p^n_{t}} + \log\frac{(\zeta)^\zeta}{(1-\zeta)^{1-\zeta}} + s_i(A_{j})  \nonumber \\
+    &\equiv w^X_{j} - \zeta r_{j} + s_i(A_{j})
+\end{align}
+where $r_{j} \equiv \log p_{j}^\ell/p^n$ and $w_{j}^X = \log (W_{j}^X/p^n)$ and we can renormalize the indirect utility function to get rid of the constant. We also normalize $p^n=1$.
+Then, worker demand for local goods is,
+\begin{equation}\label{eq_worker_local_demand}
+    HD_{ij} = \zeta \frac{W^X_{j}}{p^\ell_{j}}
+\end{equation}
+
+ 
+
+We assume there to be heterogeneity in worker preferences for amenities. Specifically,
+\begin{equation}\label{eq_worker_amenities}
+    s_i(A_{j}) = a_{j}\beta_d^a + x_{j}^A\beta_d^x + \beta_d^{st}st_{ij} +  \varepsilon_{ij}
+\end{equation}
+where $d\in\{\text{White}, \text{Black}\}$ is a demographic group of $i$ and:
+\begin{itemize}
+    \item $\beta_d^x$ is value of exogenous amenities
+    \item $\beta_d^{a}$ is value of endogenous amenities
+    \item $\beta_d^{st}$ is value of living in state of birth 
+    \item $st_{ij}$ is a dummy variable that is 1 if $i$'s state of birth is $j$ and 0 otherwise.
+    \item $\varepsilon_{ij}\sim\text{Type I Extreme Value}$
+\end{itemize}
+Our assumption implies that workers value city amenities differently based on their demographic attributes. Specifically, the model allows workers to assign distinct importance to exogenous amenities (such as climate or geography), endogenous amenities (such as public goods and services), and location-specific factors like residing in their birth state or census division. By incorporating these heterogeneities, the model captures how different demographic groups make location decisions based on their valuation of amenities. Additionally, the inclusion of an idiosyncratic preference shock ($\varepsilon_{ij}$) accounts for unobserved factors influencing individual choices, ensuring that workers' location preferences are not entirely deterministic.
+
+
+Substituting this into the indirect utility function,
+$$V_{ij}^X = (w_{j}^X-\zeta r_{j})\beta^w_d  + a_{j}\beta_d^a + x_{j}^A\beta_d^x + \beta_d^{st}x_{ij}^{st} + \varepsilon_{ij}$$ 
+Define $\delta_{jd}^X$ as the utility value of the components of the city $j$ which all workers of demographic group $d$ and education level $X$ value identically,
+$$\delta_{jd}^X = (w_{j} - \zeta r_{j})\beta_d^w + \beta^a_d a_{j} + \beta^x_d x_{j}^A$$
+Then,
+$$V_{ij} = \delta_{jd} + \beta^{st}_d st_{ij} + \varepsilon_{ij}$$
+Given the distribution of $\varepsilon$, observe that this is the standard conditional logit model. In particular, we can interpret aggregate population differences in cities of workers of type $z$ as differences in the average utility for these cities. Hence, the expected population of high and low skill workers in each city is just the probability of living in a given city summed over all workers of that type, i.e.: 
+\begin{align}
+H_{j} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})} \\
+L_{j} &= \sum_{i\in\mc{L}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})}
+\end{align}
+where $\mc{H}$ and $\mc{L}$ represent the total set of high and low-skill workers, respectively.
+
+Denote $\mc{H}_j$ to be the set of workers born in $j$'s state and suppose every city is in a different state. Then we can simplify,
+\begin{align*}
+H_{j} &= \sum_{i\in\mc{H}} \frac{\exp(\delta_{jd} + \beta_d^{st}st_{ij})}{\sum_{k} \exp(\delta_{kd} + \beta_d^{st}st_{ik})} \\
+&= \sum_{i\in\mc{H}_j} \frac{\exp(\delta_{jd} + \beta_d^{st})}{\exp(\delta_{jd} + \beta_d^{st}) + \sum_{k\neq j} \exp(\delta_{jd})} \\
+&\quad+ \sum_{n\neq j}\sum_{i\in \mc{H}_n} \frac{\exp(\delta_{jd})}{\exp(\delta_{nd} + \beta_d^{st})+\sum_{k\neq n} \exp(\delta_{kd})} \\
+&= |\mc{H}_j|\frac{\exp(\delta_{jd} + \beta_d^{st})}{\exp(\delta_{jd} + \beta_d^{st}) + \sum_{k\neq j} \exp(\delta_{jd})} + \sum_{n\neq j} |\mc{H}_n| \frac{\exp(\delta_{jd})}{\exp(\delta_{nd} + \beta_d^{st})+\sum_{k\neq n} \exp(\delta_{kd})} 
+\end{align*}
+Therefore, we can work with aggregate data instead of individual level data.
 %By BLP , there is a unique vector of mean utilities $\delta_{j}$ that imply the choice shares $H_{j}, L_{j}$ in the data.  From there, section D shows how $\Delta \delta_{jd}$, $\Delta p_{j}$, and the demographic variables form a residual term  that is orthogonal to our instrument $\Delta Z_{j}^x$ (and any interactions with local housing supply elasticities) at the true parameter values. Therefore, we use the moment conditions from that section to identify the nonlinear parameters in the inner loop. 
 
 
